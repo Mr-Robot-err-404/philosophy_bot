@@ -1,0 +1,7 @@
+-- +goose Up
+CREATE TABLE IF NOT EXISTS login(
+	id VARCHAR(100) NOT NULL,
+	created_at TIMESTAMP NOT NULL,
+	last_login TIMESTAMP NOT NULL,
+	PRIMARY KEY(id)
+);

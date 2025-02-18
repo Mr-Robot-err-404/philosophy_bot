@@ -1,0 +1,3 @@
+-- +goose Up
+ALTER TABLE replies
+ADD COLUMN video_id VARCHAR(100) REFERENCES videos ON DELETE CASCADE;

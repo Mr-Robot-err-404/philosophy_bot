@@ -1,0 +1,5 @@
+-- +goose Up
+CREATE TABLE IF NOT EXISTS videos(
+	id VARCHAR(100) NOT NULL,
+	PRIMARY KEY(id)
+);
