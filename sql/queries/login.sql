@@ -8,8 +8,7 @@ VALUES(
 RETURNING *;
 
 -- name: GetLoginDetails :one
-SELECT * FROM login
-WHERE id = ?;
+SELECT * FROM login;
 
 -- name: UpdateLogin :one
 UPDATE login

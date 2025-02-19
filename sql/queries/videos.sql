@@ -1,7 +1,7 @@
--- GetVideos: many
+-- name: GetVideos :many
 SELECT * FROM videos;
 
--- SaveVideo: one
+-- name: SaveVideo :one
 INSERT INTO videos (id)
 VALUES (?)
 RETURNING *;

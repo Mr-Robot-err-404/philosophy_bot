@@ -12,7 +12,7 @@ type VideoSearch struct {
 	Err     error
 }
 
-func searchTrendingRegions(key string) []string {
+func searchTrendingRegions(key string, vid_map map[string]bool) []string {
 	total_results := []string{}
 	err_resp := []error{}
 
@@ -44,7 +44,9 @@ func searchTrendingRegions(key string) []string {
 	close(ch)
 	<-done
 
-	final_result := filter(total_results)
+	logErrors(err_resp)
+
+	final_result := filter(total_results, vid_map)
 	overlap := len(total_results) - len(final_result)
 	elapsed := time.Since(ts)
 

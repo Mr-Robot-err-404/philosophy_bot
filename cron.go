@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 )
@@ -12,8 +13,8 @@ type ThreadSearch struct {
 	Err     error
 }
 
-func exploreCommentThreads(key string, videos []string) {
-	total_results := []ThreadItem{}
+func exploreCommentThreads(key string, videos []string) []RankedItem {
+	best_comments := []RankedItem{}
 	err_resp := []error{}
 
 	var wg sync.WaitGroup
@@ -37,18 +38,23 @@ func exploreCommentThreads(key string, videos []string) {
 				err_resp = append(err_resp, resp.Err)
 				continue
 			}
-			total_results = append(total_results, resp.Results...)
+			best := rankComments(resp.Results)
+			best_comments = append(best_comments, best...)
 		}
 	}()
 	wg.Wait()
 	close(ch)
 	<-done
 
-	// TODO: build a ranking system such that the best comments are returned
-
+	sort.Slice(best_comments, func(i, j int) bool {
+		return best_comments[i].Score > best_comments[j].Score
+	})
 	elapsed := time.Since(ts)
 
 	fmt.Println("ELAPSED : ", elapsed)
-	fmt.Println("COMMENTS: ", len(total_results))
+	fmt.Println("COMMENTS: ", len(best_comments))
 	fmt.Println("VIDEOS  : ", len(videos))
+	fmt.Println("--------------")
+
+	return best_comments
 }

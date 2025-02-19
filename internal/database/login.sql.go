@@ -28,11 +28,10 @@ func (q *Queries) CreateLoginDetails(ctx context.Context, id string) (Login, err
 
 const getLoginDetails = `-- name: GetLoginDetails :one
 SELECT id, created_at, last_login FROM login
-WHERE id = ?
 `
 
-func (q *Queries) GetLoginDetails(ctx context.Context, id string) (Login, error) {
-	row := q.db.QueryRowContext(ctx, getLoginDetails, id)
+func (q *Queries) GetLoginDetails(ctx context.Context) (Login, error) {
+	row := q.db.QueryRowContext(ctx, getLoginDetails)
 	var i Login
 	err := row.Scan(&i.ID, &i.CreatedAt, &i.LastLogin)
 	return i, err

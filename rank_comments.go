@@ -11,29 +11,6 @@ type RankedItem struct {
 	Score int
 }
 
-func simulateRanking() error {
-	data, err := os.ReadFile("./public/marmot.json")
-	if err != nil {
-		return err
-	}
-	var comments []ThreadItem
-	err = json.Unmarshal(data, &comments)
-	if err != nil {
-		return err
-	}
-	ranked := rankComments(comments)
-
-	for _, curr := range ranked {
-		fmt.Println("SCORE -> ", curr.Score)
-		fmt.Println("LIKES -> ", curr.Item.Snippet.TopLevelComment.Snippet.LikeCount)
-		fmt.Println("REPLY -> ", curr.Item.Snippet.TotalReplyCount)
-		fmt.Println("TEXT  -> ", curr.Item.Snippet.TopLevelComment.Snippet.TextDisplay)
-		fmt.Println("----------")
-	}
-
-	return nil
-}
-
 func rankComments(comments []ThreadItem) []RankedItem {
 	best := []RankedItem{}
 
@@ -84,4 +61,27 @@ func rankComments(comments []ThreadItem) []RankedItem {
 		best = append(best, third)
 	}
 	return best
+}
+
+func simulateRanking() error {
+	data, err := os.ReadFile("./public/marmot.json")
+	if err != nil {
+		return err
+	}
+	var comments []ThreadItem
+	err = json.Unmarshal(data, &comments)
+	if err != nil {
+		return err
+	}
+	ranked := rankComments(comments)
+
+	for _, curr := range ranked {
+		fmt.Println("SCORE -> ", curr.Score)
+		fmt.Println("LIKES -> ", curr.Item.Snippet.TopLevelComment.Snippet.LikeCount)
+		fmt.Println("REPLY -> ", curr.Item.Snippet.TotalReplyCount)
+		fmt.Println("TEXT  -> ", curr.Item.Snippet.TopLevelComment.Snippet.TextDisplay)
+		fmt.Println("----------")
+	}
+
+	return nil
 }

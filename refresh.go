@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type OAuthResp struct {
@@ -47,4 +50,51 @@ func refresh_token() (string, error) {
 		return "", err
 	}
 	return s.Access_token, nil
+}
+
+func refreshSession(id string) (time.Time, error) {
+	access_token, err := refresh_token()
+	if err != nil {
+		return time.Time{}, err
+	}
+	err = renewAccessToken(access_token)
+	if err != nil {
+		return time.Time{}, err
+	}
+	login, err := queries.UpdateLogin(ctx, id)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return login.LastLogin, nil
+}
+
+func refresh_quota(id string) (time.Time, error) {
+	quota, err := queries.RefreshQuota(ctx, id)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return quota.UpdatedAt, nil
+}
+
+func renewAccessToken(access_token string) error {
+	env, err := getEnvMap()
+	if err != nil {
+		return err
+	}
+	env["ACCESS_TOKEN"] = access_token
+	err = godotenv.Write(env, "./.env")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getEnvMap() (map[string]string, error) {
+	var env_map map[string]string
+	env_map, err := godotenv.Read()
+
+	if err != nil {
+		return env_map, err
+	}
+	return env_map, nil
 }

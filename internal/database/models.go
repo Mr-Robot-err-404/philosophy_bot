@@ -23,6 +23,13 @@ type Login struct {
 	LastLogin time.Time
 }
 
+type Quotum struct {
+	ID        string
+	Quota     int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Reply struct {
 	ID        string
 	Likes     int64

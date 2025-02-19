@@ -4,10 +4,12 @@ import (
 	"bot/philosophy/internal/database"
 	"context"
 	"database/sql"
+	"log"
 	"os"
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 	_ "github.com/mattn/go-sqlite3"
 	_ "modernc.org/sqlite"
 )
@@ -28,6 +30,35 @@ func connect_db(db_path string) error {
 	}
 	ctx = context.Background()
 	queries = database.New(db)
+	return nil
+}
+
+func sisyphus() {
+	err := connect_db("./app.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func generateQuotaTable() error {
+	id := "not_all_who_wander_are_lost"
+	_, err := queries.SetupQuota(ctx, id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func generateLoginTable() error {
+	id := "sisyphus_smiled"
+	_, err := queries.CreateLoginDetails(ctx, id)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

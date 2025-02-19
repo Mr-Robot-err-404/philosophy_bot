@@ -29,6 +29,17 @@ func reduceItems(items []TrendingItem) []string {
 	return arr
 }
 
+func saveVisitedVids(vids []string) []error {
+	err_resp := []error{}
+	for _, id := range vids {
+		_, err := queries.SaveVideo(ctx, id)
+		if err != nil {
+			err_resp = append(err_resp, err)
+		}
+	}
+	return err_resp
+}
+
 func getTrendingVideos(regionCode string, key string, ch chan<- VideoSearch, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var trending TrendingResp

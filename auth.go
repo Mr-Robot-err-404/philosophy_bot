@@ -125,26 +125,3 @@ func requestCredentials(config *oauth2.Config) {
 	}
 	fmt.Println("credentials saved")
 }
-
-func renewAccessToken(access_token string) error {
-	env, err := getEnvMap()
-	if err != nil {
-		return err
-	}
-	env["ACCESS_TOKEN"] = access_token
-	err = godotenv.Write(env, "./.env")
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func getEnvMap() (map[string]string, error) {
-	var env_map map[string]string
-	env_map, err := godotenv.Read()
-
-	if err != nil {
-		return env_map, err
-	}
-	return env_map, nil
-}
