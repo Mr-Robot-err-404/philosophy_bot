@@ -52,12 +52,18 @@ func refresh_token() (string, error) {
 	return s.Access_token, nil
 }
 
-func refreshSession(id string) (time.Time, error) {
+func refreshAndRenewToken(tkn *string) error {
 	access_token, err := refresh_token()
 	if err != nil {
-		return time.Time{}, err
+		return err
 	}
+	*tkn = access_token
 	err = renewAccessToken(access_token)
+	return err
+}
+
+func renewSession(id string, tkn *string) (time.Time, error) {
+	err := refreshAndRenewToken(tkn)
 	if err != nil {
 		return time.Time{}, err
 	}

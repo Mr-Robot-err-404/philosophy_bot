@@ -82,6 +82,5 @@ func simulateRanking() error {
 		fmt.Println("TEXT  -> ", curr.Item.Snippet.TopLevelComment.Snippet.TextDisplay)
 		fmt.Println("----------")
 	}
-
 	return nil
 }

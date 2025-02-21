@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 )
@@ -14,23 +13,24 @@ var RegionCodes = [10]string{"GB", "AU", "US", "IE", "NL", "SE", "NO", "DK", "NZ
 
 func main() {
 	sisyphus()
-	table_cache, err := getTableCache()
+	access_token := os.Getenv("ACCESS_TOKEN")
+	key := os.Getenv("QUOTE_API_KEY")
+
+	refreshAndRenewToken(&access_token)
+	credentials := Credentials{key: key, access_token: access_token}
+
+	table_cache, err := getTableCache(&access_token)
 	if err != nil {
 		log.Fatal(err)
 	}
-	// access_token := os.Getenv("ACCESS_TOKEN")
-	key := os.Getenv("QUOTE_API_KEY")
+	quota := int(table_cache.quota.Quota)
 	vid_map := makeVidMap(table_cache.videos)
 
-	// stack := shuffleStack(table_cache.quotes)
+	stack := shuffleStack(table_cache.quotes)
 	trending := searchTrendingRegions(key, vid_map)
-	comments := exploreCommentThreads(key, trending)
+	comments, _ := exploreCommentThreads(key, trending)
 
-	for _, ranked := range comments {
-		fmt.Println("VIDEO -> ", ranked.Item.Snippet.VideoId)
-		fmt.Println("SCORE -> ", ranked.Score)
-		fmt.Println("LIKES -> ", ranked.Item.Snippet.TopLevelComment.Snippet.LikeCount)
-		fmt.Println("REPLY -> ", ranked.Item.Snippet.TotalReplyCount)
-		fmt.Println("----------")
-	}
+	payload := prepareComments(comments, stack, quota)
+	wisdom, ts := dropWisdom(payload, credentials)
+
 }

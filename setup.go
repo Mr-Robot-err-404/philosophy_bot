@@ -44,8 +44,22 @@ func sisyphus() {
 	}
 }
 
-func generateQuotaTable() error {
+func init_tables() error {
+	err := generateQuotesTable("./public/quotes.csv")
+	if err != nil {
+		return err
+	}
 	id := "not_all_who_wander_are_lost"
+	err = generateQuotaTable(id)
+	if err != nil {
+		return err
+	}
+	id = "sisyphus_smiled"
+	err = generateLoginTable(id)
+	return nil
+}
+
+func generateQuotaTable(id string) error {
 	_, err := queries.SetupQuota(ctx, id)
 	if err != nil {
 		return err
@@ -53,8 +67,7 @@ func generateQuotaTable() error {
 	return nil
 }
 
-func generateLoginTable() error {
-	id := "sisyphus_smiled"
+func generateLoginTable(id string) error {
 	_, err := queries.CreateLoginDetails(ctx, id)
 	if err != nil {
 		return err

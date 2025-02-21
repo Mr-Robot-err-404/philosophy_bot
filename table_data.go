@@ -13,7 +13,7 @@ type TableCache struct {
 	quota  database.Quotum
 }
 
-func getTableCache() (TableCache, error) {
+func getTableCache(access_token *string) (TableCache, error) {
 	quotes, err := queries.GetQuotes(ctx)
 	if err != nil {
 		return TableCache{}, err
@@ -37,7 +37,7 @@ func getTableCache() (TableCache, error) {
 	fmt.Println("time since last login: ", elapsed, "sec")
 
 	if elapsed > 3000 {
-		ts, err := refreshSession(login.ID)
+		ts, err := renewSession(login.ID, access_token)
 		if err != nil {
 			return TableCache{}, err
 		}

@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 )
 
+const COMMENT_COST = 50
+
 func filter(arr []string, vid_map map[string]bool) []string {
 	slice := []string{}
 	seen := make(map[string]string)
@@ -38,7 +40,7 @@ func makeVidMap(videos []string) map[string]bool {
 	return vid_map
 }
 
-func constructDisplayQuote(q string, author string) string {
+func constructWisdom(q string, author string) string {
 	quote := "Beep, bop... I'm the Philosophy Bot. Here, have a quote: \n\n" + `"`
 	quote += q + `"` + "\n"
 	quote += "~ " + author

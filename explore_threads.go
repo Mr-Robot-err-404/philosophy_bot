@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -13,15 +12,14 @@ type ThreadSearch struct {
 	Err     error
 }
 
-func exploreCommentThreads(key string, videos []string) []RankedItem {
+func exploreCommentThreads(key string, videos []string) ([]RankedItem, time.Duration) {
 	best_comments := []RankedItem{}
 	err_resp := []error{}
+	ts := time.Now()
 
 	var wg sync.WaitGroup
 	ch := make(chan ThreadSearch)
 	done := make(chan bool)
-
-	ts := time.Now()
 
 	for _, vid := range videos {
 		wg.Add(1)
@@ -49,12 +47,5 @@ func exploreCommentThreads(key string, videos []string) []RankedItem {
 	sort.Slice(best_comments, func(i, j int) bool {
 		return best_comments[i].Score > best_comments[j].Score
 	})
-	elapsed := time.Since(ts)
-
-	fmt.Println("ELAPSED : ", elapsed)
-	fmt.Println("COMMENTS: ", len(best_comments))
-	fmt.Println("VIDEOS  : ", len(videos))
-	fmt.Println("--------------")
-
-	return best_comments
+	return best_comments, time.Since(ts)
 }
