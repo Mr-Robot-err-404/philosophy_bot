@@ -5,17 +5,24 @@ import (
 	"time"
 )
 
-type WiseReply struct {
-	Resp PostedReplyResp
-	Err  error
+type ReplyStatus struct {
+	Resp     PostedReplyResp
+	Video_id string
+	Err      error
 }
 
-func dropWisdom(replies []ReplyPayload, credentials Credentials) ([]PostedReplyResp, time.Duration) {
-	wisdom := []PostedReplyResp{}
+type WiseReply struct {
+	Reply    PostedReplyResp
+	Video_id string
+	Quote_id int64
+}
+
+func dropWisdom(replies []ReplyInfo, credentials Credentials) ([]WiseReply, time.Duration) {
+	wisdom := []WiseReply{}
 	err_resp := []error{}
 
 	var wg sync.WaitGroup
-	ch := make(chan WiseReply)
+	ch := make(chan ReplyStatus)
 	done := make(chan bool)
 
 	ts := time.Now()
@@ -35,7 +42,7 @@ func dropWisdom(replies []ReplyPayload, credentials Credentials) ([]PostedReplyR
 				err_resp = append(err_resp, curr.Err)
 				continue
 			}
-			wisdom = append(wisdom, curr.Resp)
+			wisdom = append(wisdom, WiseReply{Reply: curr.Resp, Video_id: curr.Video_id})
 		}
 	}()
 	wg.Wait()

@@ -16,12 +16,19 @@ type ReplyPayload struct {
 	} `json:"snippet"`
 }
 
+type ReplyInfo struct {
+	Payload  ReplyPayload
+	Video_id string
+	Quote_id int64
+}
+
 type PostedReplyResp struct {
 	Id      string `json:"id"`
 	Snippet struct {
 		ChannelId    string `json:"channelId"`
 		TextOriginal string `json:"textOriginal"`
 		ParentId     string `json:"parentId"`
+		LikeCount    int    `json:"likeCount"`
 	} `json:"snippet"`
 }
 
@@ -30,14 +37,16 @@ type Credentials struct {
 	access_token string
 }
 
-func postReply(payload ReplyPayload, credentials Credentials, ch chan<- WiseReply, wg *sync.WaitGroup) {
+func postReply(info ReplyInfo, credentials Credentials, ch chan<- ReplyStatus, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	payload := info.Payload
 	var comment_resp PostedReplyResp
 
 	url := PostComment + "&key=" + credentials.key
 	json_body, err := json.Marshal(&payload)
 	if err != nil {
-		ch <- WiseReply{Err: err}
+		ch <- ReplyStatus{Err: err}
 		return
 	}
 	body_reader := bytes.NewReader(json_body)
@@ -46,7 +55,7 @@ func postReply(payload ReplyPayload, credentials Credentials, ch chan<- WiseRepl
 	req.Header.Set("Authorization", "Bearer "+credentials.access_token)
 	req.Header.Set("Content-Type", "application/json")
 	if err != nil {
-		ch <- WiseReply{Err: err}
+		ch <- ReplyStatus{Err: err}
 		return
 
 	}
@@ -54,23 +63,23 @@ func postReply(payload ReplyPayload, credentials Credentials, ch chan<- WiseRepl
 	resp, err := client.Do(req)
 
 	if err != nil {
-		ch <- WiseReply{Err: err}
+		ch <- ReplyStatus{Err: err}
 		return
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		ch <- WiseReply{Err: fmt.Errorf("%s\n", resp.Status)}
+		ch <- ReplyStatus{Err: fmt.Errorf("%s\n", resp.Status)}
 		return
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		ch <- WiseReply{Err: err}
+		ch <- ReplyStatus{Err: err}
 		return
 	}
 	err = json.Unmarshal(body, &comment_resp)
 	if err != nil {
-		ch <- WiseReply{Err: err}
+		ch <- ReplyStatus{Err: err}
 		return
 	}
-	ch <- WiseReply{Resp: comment_resp}
+	ch <- ReplyStatus{Resp: comment_resp}
 }

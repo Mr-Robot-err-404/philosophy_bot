@@ -10,7 +10,7 @@ import (
 )
 
 type Cornucopium struct {
-	ID         interface{}
+	ID         int64
 	Quote      string
 	Author     string
 	Categories string
@@ -35,7 +35,7 @@ type Reply struct {
 	Likes     int64
 	QuoteID   int64
 	CreatedAt sql.NullTime
-	VideoID   sql.NullString
+	VideoID   string
 }
 
 type Video struct {

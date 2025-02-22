@@ -22,7 +22,7 @@ RETURNING id, quote, author, categories, created_at
 `
 
 type CreateQuoteParams struct {
-	ID         interface{}
+	ID         int64
 	Quote      string
 	Author     string
 	Categories string

@@ -7,7 +7,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
 )
 
 const getReplies = `-- name: GetReplies :many
@@ -59,7 +58,7 @@ type StoreReplyParams struct {
 	ID      string
 	Likes   int64
 	QuoteID int64
-	VideoID sql.NullString
+	VideoID string
 }
 
 func (q *Queries) StoreReply(ctx context.Context, arg StoreReplyParams) ([]Reply, error) {

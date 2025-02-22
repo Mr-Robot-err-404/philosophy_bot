@@ -2,8 +2,8 @@ package main
 
 import "bot/philosophy/internal/database"
 
-func prepareComments(ranked []RankedItem, stack []database.Cornucopium, quota int) []ReplyPayload {
-	resp := []ReplyPayload{}
+func prepareComments(ranked []RankedItem, stack []database.Cornucopium, quota int) []ReplyInfo {
+	resp := []ReplyInfo{}
 	capacity := (quota / COMMENT_COST) - 1
 
 	for i, comment := range ranked {
@@ -14,9 +14,16 @@ func prepareComments(ranked []RankedItem, stack []database.Cornucopium, quota in
 		curr := stack[idx]
 		wisdom := constructWisdom(curr.Quote, curr.Author)
 
-		reply := ReplyPayload{}
-		reply.Snippet.ParentId = comment.Item.Id
-		reply.Snippet.TextOriginal = wisdom
+		reply := ReplyInfo{}
+		payload := ReplyPayload{}
+
+		payload.Snippet.ParentId = comment.Item.Id
+		payload.Snippet.TextOriginal = wisdom
+
+		reply.Payload = payload
+		reply.Video_id = comment.Item.Snippet.VideoId
+		reply.Quote_id = curr.ID
+
 		resp = append(resp, reply)
 	}
 	return resp

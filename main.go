@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 )
@@ -16,13 +17,16 @@ func main() {
 	access_token := os.Getenv("ACCESS_TOKEN")
 	key := os.Getenv("QUOTE_API_KEY")
 
-	refreshAndRenewToken(&access_token)
-	credentials := Credentials{key: key, access_token: access_token}
+	err := refreshAndRenewToken(&access_token)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	table_cache, err := getTableCache(&access_token)
 	if err != nil {
 		log.Fatal(err)
 	}
+	credentials := Credentials{key: key, access_token: access_token}
 	quota := int(table_cache.quota.Quota)
 	vid_map := makeVidMap(table_cache.videos)
 
@@ -33,4 +37,7 @@ func main() {
 	payload := prepareComments(comments, stack, quota)
 	wisdom, ts := dropWisdom(payload, credentials)
 
+	fmt.Println("dropped wisdom in ", ts, " sec")
+
+	saveProgress(wisdom)
 }
