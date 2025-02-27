@@ -42,6 +42,31 @@ func (q *Queries) GetReplies(ctx context.Context) ([]Reply, error) {
 	return items, nil
 }
 
+const linkVideo = `-- name: LinkVideo :one
+UPDATE replies
+SET video_id = ?
+WHERE id = ?
+RETURNING id, likes, quote_id, created_at, video_id
+`
+
+type LinkVideoParams struct {
+	VideoID string
+	ID      string
+}
+
+func (q *Queries) LinkVideo(ctx context.Context, arg LinkVideoParams) (Reply, error) {
+	row := q.db.QueryRowContext(ctx, linkVideo, arg.VideoID, arg.ID)
+	var i Reply
+	err := row.Scan(
+		&i.ID,
+		&i.Likes,
+		&i.QuoteID,
+		&i.CreatedAt,
+		&i.VideoID,
+	)
+	return i, err
+}
+
 const storeReply = `-- name: StoreReply :many
 INSERT INTO replies(id, likes, quote_id, video_id, created_at)
 VALUES (

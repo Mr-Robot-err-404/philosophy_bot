@@ -11,3 +11,9 @@ VALUES (
         datetime('now')
 )
 RETURNING *;
+
+-- name: LinkVideo :one
+UPDATE replies
+SET video_id = ?
+WHERE id = ?
+RETURNING *;

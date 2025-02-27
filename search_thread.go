@@ -58,5 +58,5 @@ func findCommentThread(video_id string, key string, ch chan<- ThreadSearch, wg *
 		ch <- ThreadSearch{Err: err}
 		return
 	}
-	ch <- ThreadSearch{Results: thread.Items}
+	ch <- ThreadSearch{Results: thread.Items, VideoId: video_id}
 }

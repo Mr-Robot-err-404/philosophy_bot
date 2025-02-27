@@ -27,6 +27,21 @@ func filter(arr []string, vid_map map[string]bool) []string {
 	return slice
 }
 
+func filterUnique(arr []string) []string {
+	seen := make(map[string]bool)
+	unique := []string{}
+
+	for _, s := range arr {
+		_, exists := seen[s]
+		if exists {
+			continue
+		}
+		seen[s] = true
+		unique = append(unique, s)
+	}
+	return unique
+}
+
 func makeVidMap(videos []string) map[string]bool {
 	vid_map := make(map[string]bool)
 
@@ -55,6 +70,15 @@ func shuffleStack(quotes []database.Cornucopium) []database.Cornucopium {
 		stack[j] = tmp
 	})
 	return stack
+}
+
+func idxOf(arr string, target byte) int {
+	for i := range arr {
+		if arr[i] == target {
+			return i
+		}
+	}
+	return -1
 }
 
 func logErrors(slice []error) {

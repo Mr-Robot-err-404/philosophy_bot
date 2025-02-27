@@ -21,7 +21,7 @@ func prepareComments(ranked []RankedItem, stack []database.Cornucopium, quota in
 		payload.Snippet.TextOriginal = wisdom
 
 		reply.Payload = payload
-		reply.Video_id = comment.Item.Snippet.VideoId
+		reply.Video_id = comment.VideoId
 		reply.Quote_id = curr.ID
 
 		resp = append(resp, reply)

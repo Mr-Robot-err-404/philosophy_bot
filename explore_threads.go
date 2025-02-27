@@ -10,6 +10,7 @@ type ThreadSearch struct {
 	Results []ThreadItem
 	Msg     string
 	Err     error
+	VideoId string
 }
 
 func exploreCommentThreads(key string, videos []string) ([]RankedItem, time.Duration) {
@@ -36,7 +37,7 @@ func exploreCommentThreads(key string, videos []string) ([]RankedItem, time.Dura
 				err_resp = append(err_resp, resp.Err)
 				continue
 			}
-			best := rankComments(resp.Results)
+			best := rankComments(resp.Results, resp.VideoId)
 			best_comments = append(best_comments, best...)
 		}
 	}()

@@ -7,16 +7,17 @@ import (
 )
 
 type RankedItem struct {
-	Item  ThreadItem
-	Score int
+	Item    ThreadItem
+	Score   int
+	VideoId string
 }
 
-func rankComments(comments []ThreadItem) []RankedItem {
+func rankComments(comments []ThreadItem, video_id string) []RankedItem {
 	best := []RankedItem{}
 
-	first := RankedItem{}
-	second := RankedItem{}
-	third := RankedItem{}
+	first := RankedItem{VideoId: video_id}
+	second := RankedItem{VideoId: video_id}
+	third := RankedItem{VideoId: video_id}
 
 	for i := range comments {
 		item := comments[i]
@@ -73,7 +74,7 @@ func simulateRanking() error {
 	if err != nil {
 		return err
 	}
-	ranked := rankComments(comments)
+	ranked := rankComments(comments, "some_id")
 
 	for _, curr := range ranked {
 		fmt.Println("SCORE -> ", curr.Score)

@@ -102,9 +102,9 @@ func generateQuotesTable(path string) error {
 			quote += string(char)
 			idx++
 		}
-		id := uuid.New().ID()
+		id := int64(uuid.New().ID())
+		params := database.CreateQuoteParams{ID: id, Quote: quote, Author: author, Categories: "default"}
 
-		params := database.CreateQuoteParams{ID: int64(id), Quote: quote, Author: author, Categories: "default"}
 		_, err := queries.CreateQuote(ctx, params)
 		if err != nil {
 			return err
