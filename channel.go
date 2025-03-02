@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -31,6 +32,9 @@ func getChannel(s string, key string) (ChannelItem, error) {
 
 	if err != nil {
 		return ChannelItem{}, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return ChannelItem{}, fmt.Errorf("%s\n", resp.Status)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)

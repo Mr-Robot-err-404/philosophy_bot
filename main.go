@@ -2,8 +2,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
+
+	"github.com/google/uuid"
 )
 
 const CommentThread = "https://www.googleapis.com/youtube/v3/commentThreads"
@@ -16,7 +19,6 @@ var RegionCodes = [10]string{"GB", "AU", "US", "IE", "NL", "SE", "NO", "DK", "NZ
 //   -> bring in the webhooks and a server!
 //  |
 //  -> keep track of quota with a comfortable margin
-//  |
 
 func main() {
 	sisyphus()
@@ -30,27 +32,22 @@ func main() {
 	cmd.Parse(os.Args[1:])
 
 	if *dev_mode {
-		_, err := os.ReadFile("./trending_vid.csv")
-		if err != nil {
-			log.Fatal(err)
-		}
+		code := uuid.New().String()
+		fmt.Println(code)
 		return
 	}
-	access_token := os.Getenv("ACCESS_TOKEN")
-	key := os.Getenv("QUOTE_API_KEY")
-	credentials := Credentials{key: key, access_token: access_token}
+	credentials := getCredentials()
 
 	if *start_server {
 		startServer(credentials)
 		return
 	}
-
-	cache, err := getTableCache(&access_token)
+	cache, err := getTableCache(&credentials.access_token)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if *stats_mode {
-		stats(cache, key)
+		stats(cache, credentials.key)
 		return
 	}
 	if *philosophy_mode == false {

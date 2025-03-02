@@ -35,6 +35,7 @@ type PostedReplyResp struct {
 type Credentials struct {
 	key          string
 	access_token string
+	bearer       string
 }
 
 func postReply(info ReplyInfo, credentials Credentials, ch chan<- ReplyStatus, wg *sync.WaitGroup) {

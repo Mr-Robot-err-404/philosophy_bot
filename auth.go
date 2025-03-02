@@ -125,3 +125,10 @@ func requestCredentials(config *oauth2.Config) {
 	}
 	fmt.Println("credentials saved")
 }
+
+func getCredentials() Credentials {
+	access_token := os.Getenv("ACCESS_TOKEN")
+	key := os.Getenv("QUOTE_API_KEY")
+	bearer := os.Getenv("BEARER")
+	return Credentials{key: key, access_token: access_token, bearer: bearer}
+}
