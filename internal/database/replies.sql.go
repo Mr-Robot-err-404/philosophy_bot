@@ -119,3 +119,28 @@ func (q *Queries) StoreReply(ctx context.Context, arg StoreReplyParams) ([]Reply
 	}
 	return items, nil
 }
+
+const updateLikes = `-- name: UpdateLikes :one
+UPDATE replies
+SET likes = ?
+WHERE id = ?
+RETURNING id, likes, quote_id, created_at, video_id
+`
+
+type UpdateLikesParams struct {
+	Likes int64
+	ID    string
+}
+
+func (q *Queries) UpdateLikes(ctx context.Context, arg UpdateLikesParams) (Reply, error) {
+	row := q.db.QueryRowContext(ctx, updateLikes, arg.Likes, arg.ID)
+	var i Reply
+	err := row.Scan(
+		&i.ID,
+		&i.Likes,
+		&i.QuoteID,
+		&i.CreatedAt,
+		&i.VideoID,
+	)
+	return i, err
+}

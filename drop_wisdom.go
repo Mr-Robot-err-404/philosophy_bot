@@ -8,6 +8,7 @@ import (
 type ReplyStatus struct {
 	Resp     PostedReplyResp
 	Video_id string
+	Quote_id int64
 	Err      error
 }
 
@@ -27,9 +28,9 @@ func dropWisdom(replies []ReplyInfo, credentials Credentials) ([]WiseReply, time
 
 	ts := time.Now()
 
-	for _, item := range replies {
+	for _, info := range replies {
 		wg.Add(1)
-		go postReply(item, credentials, ch, &wg)
+		go postReply(info, credentials, ch, &wg)
 	}
 	go func() {
 		for {
@@ -42,7 +43,7 @@ func dropWisdom(replies []ReplyInfo, credentials Credentials) ([]WiseReply, time
 				err_resp = append(err_resp, curr.Err)
 				continue
 			}
-			wisdom = append(wisdom, WiseReply{Reply: curr.Resp, Video_id: curr.Video_id})
+			wisdom = append(wisdom, WiseReply{Reply: curr.Resp, Video_id: curr.Video_id, Quote_id: curr.Quote_id})
 		}
 	}()
 	wg.Wait()

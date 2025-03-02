@@ -7,10 +7,11 @@ import (
 )
 
 type TableCache struct {
-	quotes []database.Cornucopium
-	videos []string
-	login  database.Login
-	quota  database.Quotum
+	quotes  []database.Cornucopium
+	replies []database.Reply
+	videos  []string
+	login   database.Login
+	quota   database.Quotum
 }
 
 func getTableCache(access_token *string) (TableCache, error) {
@@ -27,6 +28,10 @@ func getTableCache(access_token *string) (TableCache, error) {
 		return TableCache{}, err
 	}
 	login, err := queries.GetLoginDetails(ctx)
+	if err != nil {
+		return TableCache{}, err
+	}
+	replies, err := queries.GetReplies(ctx)
 	if err != nil {
 		return TableCache{}, err
 	}
@@ -52,5 +57,5 @@ func getTableCache(access_token *string) (TableCache, error) {
 		fmt.Println("refreshed quota")
 		quota.UpdatedAt = updated
 	}
-	return TableCache{quotes: quotes, videos: videos, quota: quota, login: login}, nil
+	return TableCache{quotes: quotes, videos: videos, quota: quota, login: login, replies: replies}, nil
 }

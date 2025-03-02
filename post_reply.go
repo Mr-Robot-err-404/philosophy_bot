@@ -81,5 +81,5 @@ func postReply(info ReplyInfo, credentials Credentials, ch chan<- ReplyStatus, w
 		ch <- ReplyStatus{Err: err}
 		return
 	}
-	ch <- ReplyStatus{Resp: comment_resp}
+	ch <- ReplyStatus{Resp: comment_resp, Video_id: info.Video_id, Quote_id: info.Quote_id}
 }

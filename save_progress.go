@@ -38,9 +38,26 @@ func saveProgress(replies []WiseReply) {
 	logErrors(err_resp)
 }
 
+func updateLikes(stats []UpdatedStats) ([]database.Reply, []error) {
+	err_resp := []error{}
+	success := []database.Reply{}
+
+	for _, curr := range stats {
+		params := database.UpdateLikesParams{Likes: int64(curr.likes), ID: curr.id}
+		reply, err := queries.UpdateLikes(ctx, params)
+
+		if err != nil {
+			err_resp = append(err_resp, err)
+			continue
+		}
+		success = append(success, reply)
+	}
+	return success, err_resp
+}
+
 func unique_vids(replies []WiseReply) []string {
 	vids := []string{}
-	seen := make(map[string]string)
+	seen := make(map[string]bool)
 
 	for _, reply := range replies {
 		_, exists := seen[reply.Video_id]
@@ -48,6 +65,7 @@ func unique_vids(replies []WiseReply) []string {
 			continue
 		}
 		vids = append(vids, reply.Video_id)
+		seen[reply.Video_id] = true
 	}
 	return vids
 }

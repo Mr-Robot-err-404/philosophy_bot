@@ -17,3 +17,9 @@ UPDATE replies
 SET video_id = ?
 WHERE id = ?
 RETURNING *;
+
+-- name: UpdateLikes :one
+UPDATE replies
+SET likes = ?
+WHERE id = ?
+RETURNING *;

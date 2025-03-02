@@ -62,6 +62,5 @@ func getTrendingVideos(regionCode string, key string, ch chan<- VideoSearch, wg 
 		ch <- VideoSearch{Err: err}
 		return
 	}
-	msg := fmt.Sprintf("fetched -> %s\n", regionCode)
-	ch <- VideoSearch{Results: reduceItems(trending.Items), Msg: msg}
+	ch <- VideoSearch{Results: reduceItems(trending.Items), Msg: fmt.Sprintf("fetched -> %s\n", regionCode)}
 }

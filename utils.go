@@ -42,6 +42,17 @@ func filterUnique(arr []string) []string {
 	return unique
 }
 
+func makeLikeMap(replies []database.Reply) map[string]int {
+	likeMap := make(map[string]int)
+
+	for _, item := range replies {
+		id := item.ID
+		likes := item.Likes
+		likeMap[id] = int(likes)
+	}
+	return likeMap
+}
+
 func makeVidMap(videos []string) map[string]bool {
 	vid_map := make(map[string]bool)
 
@@ -53,6 +64,29 @@ func makeVidMap(videos []string) map[string]bool {
 		vid_map[id] = true
 	}
 	return vid_map
+}
+
+func simpleCSV(vids []string) string {
+	csv := ""
+	for _, s := range vids {
+		csv += s + "\n"
+	}
+	return csv
+}
+
+func check(e error) {
+	if e != nil {
+		panic(e)
+	}
+}
+
+func reduceReplies(replies []database.Reply) []string {
+	arr := []string{}
+
+	for _, curr := range replies {
+		arr = append(arr, curr.ID)
+	}
+	return arr
 }
 
 func constructWisdom(q string, author string) string {

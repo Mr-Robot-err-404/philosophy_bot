@@ -9,6 +9,20 @@ import (
 	"time"
 )
 
+type Channel struct {
+	ID        string
+	Handle    string
+	Title     string
+	CreatedAt sql.NullTime
+}
+
+type Comment struct {
+	ID        string
+	Likes     int64
+	QuoteID   int64
+	CreatedAt sql.NullTime
+}
+
 type Cornucopium struct {
 	ID         int64
 	Quote      string
