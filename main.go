@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-
-	"github.com/google/uuid"
 )
 
 const CommentThread = "https://www.googleapis.com/youtube/v3/commentThreads"
@@ -21,8 +19,6 @@ var RegionCodes = [10]string{"GB", "AU", "US", "IE", "NL", "SE", "NO", "DK", "NZ
 //  -> keep track of quota with a comfortable margin
 
 func main() {
-	sisyphus()
-
 	cmd := flag.NewFlagSet("cmd", flag.ExitOnError)
 	dev_mode := cmd.Bool("dev", false, "dev")
 	start_server := cmd.Bool("server", false, "server")
@@ -32,10 +28,15 @@ func main() {
 	cmd.Parse(os.Args[1:])
 
 	if *dev_mode {
-		code := uuid.New().String()
-		fmt.Println(code)
+		file, err := os.ReadFile("./public/payload.xml")
+		if err != nil {
+			log.Fatal(err)
+		}
+		hook_payload := parseXML(string(file))
+		fmt.Println(hook_payload)
 		return
 	}
+	sisyphus()
 	credentials := getCredentials()
 
 	if *start_server {

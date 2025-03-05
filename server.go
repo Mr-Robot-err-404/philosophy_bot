@@ -11,6 +11,8 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"golang.ngrok.com/ngrok"
+	"golang.ngrok.com/ngrok/config"
 )
 
 type Config struct {
@@ -101,7 +103,7 @@ func appHandler(prefix string, h http.Handler) http.Handler {
 
 func startServer(credentials Credentials) {
 	mux := http.NewServeMux()
-	srv := &http.Server{Handler: mux, Addr: ":6969"}
+	// srv := &http.Server{Handler: mux, Addr: ":6969"}
 	cfg := Config{credentials: credentials}
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
@@ -113,7 +115,16 @@ func startServer(credentials Credentials) {
 
 	fmt.Println("Philosophy Bot at your service")
 
-	err := srv.ListenAndServe()
+	listener, err := ngrok.Listen(ctx,
+		config.HTTPEndpoint(),
+		ngrok.WithAuthtokenFromEnv(),
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("App URL", listener.URL())
+
+	err = http.Serve(listener, mux)
 	if err != nil {
 		log.Fatal(err)
 	}
