@@ -1,27 +1,44 @@
 package main
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
 
 type HookPayload struct {
-	channelId string
-	videoId   string
+	ChannelId string
+	VideoId   string
+	Published time.Time
+	Err       error
 }
 
 func parseXML(data string) HookPayload {
 	var payload HookPayload
 	lines := strings.Split(data, "\n")
+	seen := false
 
 	for _, curr := range lines {
 		s := strings.TrimSpace(curr)
 
 		if strings.Contains(s, "yt:videoId") {
-			payload.videoId = parseId(s)
+			payload.VideoId = parseId(s)
 			continue
 		}
 		if strings.Contains(s, "yt:channelId") {
-			payload.channelId = parseId(s)
+			payload.ChannelId = parseId(s)
 		}
-		if len(payload.channelId) > 0 && len(payload.videoId) > 0 {
+		if strings.Contains(s, "published") {
+			seen = true
+			str := parseId(s)
+
+			ts, err := time.Parse(time.RFC3339Nano, str)
+			if err != nil {
+				payload.Err = err
+				continue
+			}
+			payload.Published = ts
+		}
+		if len(payload.ChannelId) > 0 && len(payload.VideoId) > 0 && seen {
 			break
 		}
 	}

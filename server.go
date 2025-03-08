@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.ngrok.com/ngrok"
@@ -16,8 +17,14 @@ import (
 )
 
 type Config struct {
-	credentials Credentials
+	Credentials Credentials
+	Jobs        chan HookPayload
 }
+
+// TODO: once published video is parsed:
+//  -> write new job to channel
+//  -> trigger go routine -> sleep, post comment, write response to results channel
+//  -> read results from second channel
 
 type QuotePayload struct {
 	Author     string `json:"author"`
@@ -25,16 +32,49 @@ type QuotePayload struct {
 	Categories string `json:"categories,omitempty"`
 }
 
+const Subscribe = "subscribe"
+const Unsubscribe = "unsubscribe"
+const MinWait = 2 * time.Minute
+const MaxWait = 10 * time.Minute
+
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
-	// HACK: authenticate -> make sure req is from youtube only
-	// parse the data -> grab video_id, channel_id
-	// post comment and save
+	tkn := req.URL.Query().Get("hub.verify_token")
+
+	if req.Method == http.MethodGet {
+		challenge := req.URL.Query().Get("hub.challenge")
+
+		fmt.Println("QUERY -> ", req.URL.Query())
+
+		w.Write([]byte(challenge))
+		return
+	}
+	if req.Method != http.MethodPost {
+		fmt.Println("Invalid method -> ", req.Method)
+		server.ErrorResp(w, http.StatusMethodNotAllowed, "Invalid method")
+		return
+	}
+	fmt.Println("Received token (POST): ", tkn)
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		server.ErrorResp(w, http.StatusBadRequest, "Failed to read body")
+		return
+	}
+	defer req.Body.Close()
+	s := string(body)
+
+	fmt.Println("BODY -> ", s)
+
+	payload := parseXML(s)
+	fmt.Println("PARSED PAYLOAD -> ", payload)
+
+	server.SuccessResp(w, 200, "All good!")
 }
 
 func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request) {
 	token, err := auth.GetBearerToken(req.Header)
 
-	if err != nil || token != cfg.credentials.bearer {
+	if err != nil || token != cfg.Credentials.bearer {
 		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
@@ -44,10 +84,15 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 		server.ErrorResp(w, http.StatusBadRequest, "Invalid tag")
 		return
 	}
-	channel, err := getChannel(tag, cfg.credentials.key)
+	channel, err := getChannel(tag, cfg.Credentials.key)
 
 	if err != nil {
 		server.ErrorResp(w, http.StatusBadRequest, "Failed to get channel")
+		return
+	}
+	err = server.PostPubSub(channel.Id, Subscribe)
+	if err != nil {
+		server.ErrorResp(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	params := database.CreateChannelParams{ID: channel.Id, Title: channel.Snippet.Title, Handle: channel.Snippet.CustomUrl}
@@ -63,7 +108,7 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) {
 	token, err := auth.GetBearerToken(req.Header)
 
-	if err != nil || token != cfg.credentials.bearer {
+	if err != nil || token != cfg.Credentials.bearer {
 		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
@@ -103,15 +148,14 @@ func appHandler(prefix string, h http.Handler) http.Handler {
 
 func startServer(credentials Credentials) {
 	mux := http.NewServeMux()
-	// srv := &http.Server{Handler: mux, Addr: ":6969"}
-	cfg := Config{credentials: credentials}
+	cfg := Config{Credentials: credentials}
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
 	mux.Handle("/app/", fileHnd)
 
 	mux.HandleFunc("POST /philosophy/channels", cfg.handlerCreateChannel)
 	mux.HandleFunc("POST /philosophy/quotes", cfg.handlerCreateQuote)
-	mux.HandleFunc("GET /diogenes/bowl", cfg.handlerDiogenes)
+	mux.HandleFunc("/diogenes/bowl", cfg.handlerDiogenes)
 
 	fmt.Println("Philosophy Bot at your service")
 

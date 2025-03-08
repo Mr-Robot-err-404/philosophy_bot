@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 	"time"
 )
@@ -12,7 +11,7 @@ type VideoSearch struct {
 	Err     error
 }
 
-func searchTrendingRegions(key string, vid_map map[string]bool) []string {
+func searchTrendingRegions(key string, vid_map map[string]bool) ([]string, time.Duration) {
 	total_results := []string{}
 	err_resp := []error{}
 
@@ -47,11 +46,7 @@ func searchTrendingRegions(key string, vid_map map[string]bool) []string {
 	logErrors(err_resp)
 
 	final_result := filter(total_results, vid_map)
-	overlap := len(total_results) - len(final_result)
 	elapsed := time.Since(ts)
 
-	fmt.Printf("Time:    %v\n", elapsed)
-	fmt.Printf("Overlap: %v\n", overlap)
-
-	return final_result
+	return final_result, elapsed
 }

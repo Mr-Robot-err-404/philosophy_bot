@@ -1,6 +1,9 @@
 package helper
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+)
 
 const CommentStats = "https://youtube.googleapis.com/youtube/v3/comments?part=snippet&id="
 
@@ -18,4 +21,8 @@ func BuildStatsUrl(comments []string, key string) (string, error) {
 	}
 	url += "&key=" + key
 	return url, nil
+}
+
+func rndInt(min int, max int) int {
+	return rand.Intn(max-min) + min
 }

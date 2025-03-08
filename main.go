@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"os"
 )
@@ -33,7 +32,9 @@ func main() {
 			log.Fatal(err)
 		}
 		hook_payload := parseXML(string(file))
-		fmt.Println(hook_payload)
+		if hook_payload.Err != nil {
+			log.Fatal(hook_payload.Err)
+		}
 		return
 	}
 	sisyphus()
