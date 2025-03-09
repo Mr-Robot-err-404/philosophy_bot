@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -42,7 +43,30 @@ func parseXML(data string) HookPayload {
 			break
 		}
 	}
+	if payload.Err != nil && (len(payload.ChannelId) == 0 || len(payload.VideoId) == 0) {
+		payload.Err = fmt.Errorf("%s\n", "Failed to parse ID from XML data")
+	}
 	return payload
+}
+
+func isPublished(payload HookPayload) bool {
+	now := time.Now().Unix()
+	diff := now - payload.Published.Unix()
+
+	if diff > MaxWait {
+		return false
+	}
+	return true
+}
+
+func isXMLValid(payload HookPayload) bool {
+	if payload.Err != nil {
+		return true
+	}
+	if len(payload.ChannelId) == 0 || len(payload.VideoId) == 0 {
+		return false
+	}
+	return true
 }
 
 func parseId(s string) string {

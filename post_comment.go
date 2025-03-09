@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 )
@@ -27,38 +28,51 @@ type CommentInfo struct {
 	QuoteId   int64
 	Payload   CommentPayload
 }
-type CommentResp struct {
+type ChannelId struct {
 	Id string `json:"id"`
 }
 
-func postComment(info CommentInfo, credentials Credentials) (CommentResp, error) {
-	var data CommentResp
+func postComment(info CommentInfo, credentials Credentials, ch chan<- TaskResult) {
+	var data ChannelId
 
 	url := CommentThread + "&key=" + credentials.key
 	body, err := json.Marshal(&info.Payload)
 
 	if err != nil {
-		return data, err
+		ch <- TaskResult{Err: err}
+		return
 	}
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return data, err
+		ch <- TaskResult{Err: err}
+		return
 	}
+	req.Header.Set("Authorization", "Bearer "+credentials.access_token)
+	req.Header.Set("Content-Type", "application/json")
+
 	client := http.Client{}
 	resp, err := client.Do(req)
 
 	if err != nil {
-		return data, err
+		ch <- TaskResult{Err: err}
+		return
+	}
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		ch <- TaskResult{Err: fmt.Errorf("%s\n", resp.Status)}
+		return
 	}
 	defer resp.Body.Close()
+	body, err = io.ReadAll(resp.Body)
 
-	body, err = io.ReadAll(req.Body)
 	if err != nil {
-		return data, err
+		ch <- TaskResult{Err: err}
+		return
 	}
 	err = json.Unmarshal(body, &data)
+
 	if err != nil {
-		return data, err
+		ch <- TaskResult{Err: err}
+		return
 	}
-	return data, nil
+	ch <- TaskResult{Info: info, Id: data.Id}
 }

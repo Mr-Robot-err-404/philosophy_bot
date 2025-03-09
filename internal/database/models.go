@@ -10,10 +10,12 @@ import (
 )
 
 type Channel struct {
-	ID        string
-	Handle    string
-	Title     string
-	CreatedAt sql.NullTime
+	ID              string
+	Handle          string
+	Title           string
+	CreatedAt       sql.NullTime
+	Frequency       int64
+	VideosSincePost int64
 }
 
 type Comment struct {
@@ -21,6 +23,7 @@ type Comment struct {
 	Likes     int64
 	QuoteID   int64
 	CreatedAt sql.NullTime
+	ChannelID string
 }
 
 type Cornucopium struct {

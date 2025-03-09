@@ -58,7 +58,6 @@ func postReply(info ReplyInfo, credentials Credentials, ch chan<- ReplyStatus, w
 	if err != nil {
 		ch <- ReplyStatus{Err: err}
 		return
-
 	}
 	client := &http.Client{}
 	resp, err := client.Do(req)

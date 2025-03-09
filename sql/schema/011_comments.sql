@@ -1,0 +1,3 @@
+-- +goose Up
+ALTER TABLE comments
+ADD COLUMN channel_id VARCHAR(100) NOT NULL REFERENCES channels ON DELETE CASCADE;

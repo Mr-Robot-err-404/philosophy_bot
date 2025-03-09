@@ -23,6 +23,6 @@ func BuildStatsUrl(comments []string, key string) (string, error) {
 	return url, nil
 }
 
-func rndInt(min int, max int) int {
+func RndInt(min int, max int) int {
 	return rand.Intn(max-min) + min
 }

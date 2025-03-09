@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.ngrok.com/ngrok"
@@ -18,7 +17,8 @@ import (
 
 type Config struct {
 	Credentials Credentials
-	Jobs        chan HookPayload
+	Jobs        chan Worker
+	Quotes      []database.Cornucopium
 }
 
 // TODO: once published video is parsed:
@@ -34,17 +34,14 @@ type QuotePayload struct {
 
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
-const MinWait = 2 * time.Minute
-const MaxWait = 10 * time.Minute
+const MinWait = 2 * 60
+const MaxWait = 10 * 60
 
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	tkn := req.URL.Query().Get("hub.verify_token")
 
 	if req.Method == http.MethodGet {
 		challenge := req.URL.Query().Get("hub.challenge")
-
-		fmt.Println("QUERY -> ", req.URL.Query())
-
 		w.Write([]byte(challenge))
 		return
 	}
@@ -53,22 +50,20 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 		server.ErrorResp(w, http.StatusMethodNotAllowed, "Invalid method")
 		return
 	}
-	fmt.Println("Received token (POST): ", tkn)
-
+	if tkn != cfg.Credentials.bearer {
+		fmt.Println("Unauthorized token: ", tkn)
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		server.ErrorResp(w, http.StatusBadRequest, "Failed to read body")
 		return
 	}
 	defer req.Body.Close()
-	s := string(body)
+	evaluateXMLData(string(body), cfg.Jobs)
 
-	fmt.Println("BODY -> ", s)
-
-	payload := parseXML(s)
-	fmt.Println("PARSED PAYLOAD -> ", payload)
-
-	server.SuccessResp(w, 200, "All good!")
+	server.SuccessResp(w, 200, "Accepted")
 }
 
 func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request) {
@@ -146,9 +141,12 @@ func appHandler(prefix string, h http.Handler) http.Handler {
 	return http.StripPrefix(prefix, h)
 }
 
-func startServer(credentials Credentials) {
+func startServer(credentials Credentials, quotes []database.Cornucopium) {
 	mux := http.NewServeMux()
-	cfg := Config{Credentials: credentials}
+	cfg := Config{Credentials: credentials, Quotes: quotes}
+
+	cfg.Jobs = make(chan Worker)
+	results := make(chan TaskResult)
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
 	mux.Handle("/app/", fileHnd)
@@ -156,8 +154,6 @@ func startServer(credentials Credentials) {
 	mux.HandleFunc("POST /philosophy/channels", cfg.handlerCreateChannel)
 	mux.HandleFunc("POST /philosophy/quotes", cfg.handlerCreateQuote)
 	mux.HandleFunc("/diogenes/bowl", cfg.handlerDiogenes)
-
-	fmt.Println("Philosophy Bot at your service")
 
 	listener, err := ngrok.Listen(ctx,
 		config.HTTPEndpoint(),
@@ -167,6 +163,9 @@ func startServer(credentials Credentials) {
 		log.Fatal(err)
 	}
 	log.Println("App URL", listener.URL())
+
+	go receiveTaskResults(results)
+	go receiveJobs(cfg.Jobs, results, &cfg.Credentials, &cfg.Quotes)
 
 	err = http.Serve(listener, mux)
 	if err != nil {

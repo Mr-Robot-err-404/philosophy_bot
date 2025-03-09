@@ -1,0 +1,21 @@
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+         xmlns="http://www.w3.org/2005/Atom">
+  <link rel="hub" href="https://pubsubhubbub.appspot.com"/>
+  <link rel="self" href="https://www.youtube.com/xml/feeds/videos.xml?channel_id=CHANNEL_ID"/>
+  <title>How to philosophize</title>
+  <updated>2025-04-01T19:05:24.552394234+00:00</updated>
+  <entry>
+    <id>yt:video:JthpbuMFSww</id>
+    <yt:videoId>JthpbuMFSww</yt:videoId>
+    <yt:channelId>UCDxfG_jEwQjlV_3A6GgDn4w</yt:channelId>
+    <title>The Funniest Moments | Big Suze | Peep Show</title>
+    <link rel="alternate" href="http://www.youtube.com/watch?v=VIDEO_ID"/>
+    <author>
+     <name>Peep Show</name>
+     <uri>http://www.youtube.com/channel/UCDxfG_jEwQjlV_3A6GgDn4w</uri>
+    </author>
+    <published>2025-04-01T19:05:24.552394234+00:00</published>
+    <updated>2025-04-01T19:05:24.552394234+00:00</updated>
+  </entry>
+</feed>
+

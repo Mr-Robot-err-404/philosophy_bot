@@ -17,7 +17,7 @@ VALUES (
 	?,
         datetime('now')
 )
-RETURNING id, handle, title, created_at
+RETURNING id, handle, title, created_at, frequency, videos_since_post
 `
 
 type CreateChannelParams struct {
@@ -34,6 +34,8 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 		&i.Handle,
 		&i.Title,
 		&i.CreatedAt,
+		&i.Frequency,
+		&i.VideosSincePost,
 	)
 	return i, err
 }
@@ -41,7 +43,7 @@ func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (C
 const deleteChannel = `-- name: DeleteChannel :one
 DELETE FROM channels
 WHERE id = ?
-RETURNING id, handle, title, created_at
+RETURNING id, handle, title, created_at, frequency, videos_since_post
 `
 
 func (q *Queries) DeleteChannel(ctx context.Context, id string) (Channel, error) {
@@ -52,12 +54,33 @@ func (q *Queries) DeleteChannel(ctx context.Context, id string) (Channel, error)
 		&i.Handle,
 		&i.Title,
 		&i.CreatedAt,
+		&i.Frequency,
+		&i.VideosSincePost,
+	)
+	return i, err
+}
+
+const findChannel = `-- name: FindChannel :one
+SELECT id, handle, title, created_at, frequency, videos_since_post FROM channels
+WHERE id = ?
+`
+
+func (q *Queries) FindChannel(ctx context.Context, id string) (Channel, error) {
+	row := q.db.QueryRowContext(ctx, findChannel, id)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.Handle,
+		&i.Title,
+		&i.CreatedAt,
+		&i.Frequency,
+		&i.VideosSincePost,
 	)
 	return i, err
 }
 
 const getChannels = `-- name: GetChannels :many
-SELECT id, handle, title, created_at FROM channels
+SELECT id, handle, title, created_at, frequency, videos_since_post FROM channels
 `
 
 func (q *Queries) GetChannels(ctx context.Context) ([]Channel, error) {
@@ -74,6 +97,8 @@ func (q *Queries) GetChannels(ctx context.Context) ([]Channel, error) {
 			&i.Handle,
 			&i.Title,
 			&i.CreatedAt,
+			&i.Frequency,
+			&i.VideosSincePost,
 		); err != nil {
 			return nil, err
 		}
@@ -86,4 +111,56 @@ func (q *Queries) GetChannels(ctx context.Context) ([]Channel, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateChannelFreq = `-- name: UpdateChannelFreq :one
+UPDATE channels
+SET frequency = ?
+WHERE id = ?
+RETURNING id, handle, title, created_at, frequency, videos_since_post
+`
+
+type UpdateChannelFreqParams struct {
+	Frequency int64
+	ID        string
+}
+
+func (q *Queries) UpdateChannelFreq(ctx context.Context, arg UpdateChannelFreqParams) (Channel, error) {
+	row := q.db.QueryRowContext(ctx, updateChannelFreq, arg.Frequency, arg.ID)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.Handle,
+		&i.Title,
+		&i.CreatedAt,
+		&i.Frequency,
+		&i.VideosSincePost,
+	)
+	return i, err
+}
+
+const updateVideosSincePost = `-- name: UpdateVideosSincePost :one
+UPDATE channels
+SET videos_since_post = ?
+WHERE id = ?
+RETURNING id, handle, title, created_at, frequency, videos_since_post
+`
+
+type UpdateVideosSincePostParams struct {
+	VideosSincePost int64
+	ID              string
+}
+
+func (q *Queries) UpdateVideosSincePost(ctx context.Context, arg UpdateVideosSincePostParams) (Channel, error) {
+	row := q.db.QueryRowContext(ctx, updateVideosSincePost, arg.VideosSincePost, arg.ID)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.Handle,
+		&i.Title,
+		&i.CreatedAt,
+		&i.Frequency,
+		&i.VideosSincePost,
+	)
+	return i, err
 }

@@ -15,3 +15,19 @@ RETURNING *;
 DELETE FROM channels
 WHERE id = ?
 RETURNING *;
+
+-- name: FindChannel :one
+SELECT * FROM channels
+WHERE id = ?;
+
+-- name: UpdateChannelFreq :one
+UPDATE channels
+SET frequency = ?
+WHERE id = ?
+RETURNING *;
+
+-- name: UpdateVideosSincePost :one
+UPDATE channels
+SET videos_since_post = ?
+WHERE id = ?
+RETURNING *;

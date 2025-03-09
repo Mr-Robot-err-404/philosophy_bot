@@ -9,24 +9,54 @@ import (
 	"context"
 )
 
-const getComments = `-- name: GetComments :many
-SELECT id, handle, title, created_at FROM channels
+const createComment = `-- name: CreateComment :one
+INSERT INTO comments (id, likes, quote_id, created_at) 
+VALUES (
+	?,
+	0,
+	?,
+	datetime('now')
+)
+RETURNING id, likes, quote_id, created_at, channel_id
 `
 
-func (q *Queries) GetComments(ctx context.Context) ([]Channel, error) {
+type CreateCommentParams struct {
+	ID      string
+	QuoteID int64
+}
+
+func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, createComment, arg.ID, arg.QuoteID)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.Likes,
+		&i.QuoteID,
+		&i.CreatedAt,
+		&i.ChannelID,
+	)
+	return i, err
+}
+
+const getComments = `-- name: GetComments :many
+SELECT id, likes, quote_id, created_at, channel_id FROM comments
+`
+
+func (q *Queries) GetComments(ctx context.Context) ([]Comment, error) {
 	rows, err := q.db.QueryContext(ctx, getComments)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Channel
+	var items []Comment
 	for rows.Next() {
-		var i Channel
+		var i Comment
 		if err := rows.Scan(
 			&i.ID,
-			&i.Handle,
-			&i.Title,
+			&i.Likes,
+			&i.QuoteID,
 			&i.CreatedAt,
+			&i.ChannelID,
 		); err != nil {
 			return nil, err
 		}
