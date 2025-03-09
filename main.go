@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-const CommentThread = "https://www.googleapis.com/youtube/v3/commentThreads"
+const CommentThread = "https://www.googleapis.com/youtube/v3/commentThreads?part=snippet"
 const TrendingVideos = "https://youtube.googleapis.com/youtube/v3/videos?part=snippet&chart=mostPopular"
 const PostComment = "https://www.googleapis.com/youtube/v3/comments?part=snippet"
 
