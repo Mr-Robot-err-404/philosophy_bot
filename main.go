@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bot/philosophy/internal/server"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 )
@@ -22,6 +24,12 @@ func main() {
 	cmd.Parse(os.Args[1:])
 
 	if *dev_mode {
+		callback := "https://a595-81-111-159-136.ngrok-free.app/diogenes/bowl"
+		err := server.PostPubSub("UC16niRr50-MSBwiO3YDb3RA", "subscribe", callback)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("subbed")
 		return
 	}
 	sisyphus()

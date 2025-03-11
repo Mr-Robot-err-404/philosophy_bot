@@ -2,12 +2,14 @@
 SELECT * FROM channels;
 
 -- name: CreateChannel :one
-INSERT INTO channels(id, title, handle, created_at)
+INSERT INTO channels(id, title, handle, created_at, frequency, videos_since_post)
 VALUES (
 	?,
 	?,
 	?,
-        datetime('now')
+        datetime('now'),
+	?,
+	?
 )
 RETURNING *;
 

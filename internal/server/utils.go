@@ -6,15 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 )
 
 const TopicUrl = "https://www.youtube.com/feeds/videos.xml?channel_id="
 const Route = "https://pubsubhubbub.appspot.com/subscribe"
 
-func PostPubSub(channelId string, mode string) error {
-	token := os.Getenv("BEARER")
-	callback := os.Getenv("CALLBACK")
+func PostPubSub(channelId string, mode string, callback string, tkn string) error {
 	topic := TopicUrl + channelId
 
 	formData := url.Values{}
@@ -22,7 +19,7 @@ func PostPubSub(channelId string, mode string) error {
 	formData.Set("hub.topic", topic)
 	formData.Set("hub.verify", "async")
 	formData.Set("hub.mode", mode)
-	formData.Set("hub.verify_token", token)
+	formData.Set("hub.verify_token", tkn)
 
 	client := http.Client{}
 	payload := bytes.NewBufferString(formData.Encode())

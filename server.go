@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/google/uuid"
 	"golang.ngrok.com/ngrok"
@@ -20,11 +21,6 @@ type Config struct {
 	Jobs        chan Worker
 	Quotes      []database.Cornucopium
 }
-
-// TODO: once published video is parsed:
-//  -> write new job to channel
-//  -> trigger go routine -> sleep, post comment, write response to results channel
-//  -> read results from second channel
 
 type QuotePayload struct {
 	Author     string `json:"author"`
@@ -63,6 +59,14 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 	evaluateXMLData(string(body), cfg.Jobs)
 
+	rndId := uuid.New().String()
+	fileName := rndId + ".xml"
+	err = os.WriteFile("./tmp/"+fileName, body, 0644)
+
+	if err != nil {
+		fmt.Println("err saving file -> ", err)
+	}
+
 	server.SuccessResp(w, 200, "Accepted")
 }
 
@@ -85,12 +89,20 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 		server.ErrorResp(w, http.StatusBadRequest, "Failed to get channel")
 		return
 	}
-	err = server.PostPubSub(channel.Id, Subscribe)
+	callback := "https://" + req.Host + "/diogenes/bowl"
+
+	err = server.PostPubSub(channel.Id, Subscribe, callback, cfg.Credentials.bearer)
 	if err != nil {
 		server.ErrorResp(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	params := database.CreateChannelParams{ID: channel.Id, Title: channel.Snippet.Title, Handle: channel.Snippet.CustomUrl}
+	params := database.CreateChannelParams{
+		ID:              channel.Id,
+		Title:           channel.Snippet.Title,
+		Handle:          channel.Snippet.CustomUrl,
+		Frequency:       1,
+		VideosSincePost: 0,
+	}
 	_, err = queries.CreateChannel(ctx, params)
 
 	if err != nil {

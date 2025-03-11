@@ -52,6 +52,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, credentials *Credenti
 		channelId := curr.ChannelId
 
 		if curr.Err != nil {
+			fmt.Println("TASK ERR -> ", curr.Err)
 			continue
 		}
 		stack := shuffleStack(*quotes)
@@ -63,6 +64,8 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, credentials *Credenti
 		payload.Snippet.TopLevelComment.Snippet.TextOriginal = constructWisdom(q.Quote, q.Author)
 
 		info := CommentInfo{VideoId: videoId, ChannelId: channelId, QuoteId: q.ID, Payload: payload}
+		fmt.Println("RECEIVED TASK -> ", info)
+
 		go executeTask(ch, info, *credentials, task.Delay)
 	}
 }
@@ -70,7 +73,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, credentials *Credenti
 func receiveTaskResults(ch <-chan TaskResult) {
 	for result := range ch {
 		if result.Err != nil {
-			fmt.Println(result.Err)
+			fmt.Println("RESULT ERR -> ", result.Err)
 			continue
 		}
 		params := database.CreateCommentParams{ID: result.Id, QuoteID: result.Info.QuoteId}

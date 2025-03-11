@@ -10,24 +10,34 @@ import (
 )
 
 const createChannel = `-- name: CreateChannel :one
-INSERT INTO channels(id, title, handle, created_at)
+INSERT INTO channels(id, title, handle, created_at, frequency, videos_since_post)
 VALUES (
 	?,
 	?,
 	?,
-        datetime('now')
+        datetime('now'),
+	?,
+	?
 )
 RETURNING id, handle, title, created_at, frequency, videos_since_post
 `
 
 type CreateChannelParams struct {
-	ID     string
-	Title  string
-	Handle string
+	ID              string
+	Title           string
+	Handle          string
+	Frequency       int64
+	VideosSincePost int64
 }
 
 func (q *Queries) CreateChannel(ctx context.Context, arg CreateChannelParams) (Channel, error) {
-	row := q.db.QueryRowContext(ctx, createChannel, arg.ID, arg.Title, arg.Handle)
+	row := q.db.QueryRowContext(ctx, createChannel,
+		arg.ID,
+		arg.Title,
+		arg.Handle,
+		arg.Frequency,
+		arg.VideosSincePost,
+	)
 	var i Channel
 	err := row.Scan(
 		&i.ID,
