@@ -45,6 +45,8 @@ func exploreCommentThreads(key string, videos []string) ([]RankedItem, time.Dura
 	close(ch)
 	<-done
 
+	logErrors(err_resp)
+
 	sort.Slice(best_comments, func(i, j int) bool {
 		return best_comments[i].Score > best_comments[j].Score
 	})

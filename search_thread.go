@@ -35,7 +35,7 @@ func findCommentThread(video_id string, key string, ch chan<- ThreadSearch, wg *
 	defer wg.Done()
 	var thread ThreadResp
 
-	url := CommentThread + "?part=snippet&order=relevance&maxResults=100&videoId=" + video_id + "&key=" + key
+	url := CommentThread + "&order=relevance&maxResults=100&videoId=" + video_id + "&key=" + key
 	resp, err := http.Get(url)
 
 	if err != nil {

@@ -81,7 +81,7 @@ func simulateRanking() error {
 		fmt.Println("LIKES -> ", curr.Item.Snippet.TopLevelComment.Snippet.LikeCount)
 		fmt.Println("REPLY -> ", curr.Item.Snippet.TotalReplyCount)
 		fmt.Println("TEXT  -> ", curr.Item.Snippet.TopLevelComment.Snippet.TextDisplay)
-		fmt.Println("----------")
+		printBreak()
 	}
 	return nil
 }

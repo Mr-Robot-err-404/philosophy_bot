@@ -115,10 +115,10 @@ func requestCredentials(config *oauth2.Config) {
 	if err := srv.Shutdown(context.Background()); err != nil {
 		log.Fatalf("Failed to shut down server: %v", err)
 	}
-	fmt.Println("-----------")
+	printBreak()
 	fmt.Println("access token -> ", token.AccessToken)
 	fmt.Println("refresh token -> ", token.RefreshToken)
-	fmt.Println("-----------")
+	printBreak()
 	err = saveCredentials(token)
 	if err != nil {
 		log.Fatal("failed to save credentials to env file")

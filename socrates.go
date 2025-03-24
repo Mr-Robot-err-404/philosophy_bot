@@ -31,9 +31,9 @@ func cronJob(cache TableCache, credentials Credentials) {
 }
 
 func printSummary(summary Summary) {
-	fmt.Println("---------")
+	printBreak()
 	fmt.Printf("%s in: %v\n", summary.title, summary.ts)
 	if summary.end {
-		fmt.Println("---------")
+		printBreak()
 	}
 }

@@ -121,6 +121,10 @@ func logErrors(slice []error) {
 	}
 }
 
+func printBreak() {
+	fmt.Println("---------")
+}
+
 func logSlice(slice []string) {
 	for _, s := range slice {
 		fmt.Println(s)

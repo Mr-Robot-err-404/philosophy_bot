@@ -57,7 +57,7 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer req.Body.Close()
-	evaluateXMLData(string(body), cfg.Jobs)
+	evaluateXMLData(string(body), cfg.Jobs, &cfg.Credentials.access_token)
 
 	rndId := uuid.New().String()
 	fileName := rndId + ".xml"
@@ -66,7 +66,6 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		fmt.Println("err saving file -> ", err)
 	}
-
 	server.SuccessResp(w, 200, "Accepted")
 }
 

@@ -18,7 +18,7 @@ type TaskResult struct {
 	Err  error
 }
 
-func evaluateXMLData(data string, jobs chan Worker) {
+func evaluateXMLData(data string, jobs chan Worker, access_token *string) {
 	payload := parseXML(data)
 
 	if !isXMLValid(payload) {
@@ -42,7 +42,7 @@ func evaluateXMLData(data string, jobs chan Worker) {
 		return
 	}
 	c = 0
-	scheduleJob(payload, jobs)
+	scheduleJob(payload, jobs, access_token)
 }
 
 func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, credentials *Credentials, quotes *[]database.Cornucopium) {
@@ -92,8 +92,13 @@ func executeTask(ch chan<- TaskResult, info CommentInfo, credentials Credentials
 	postComment(info, credentials, ch)
 }
 
-func scheduleJob(payload HookPayload, jobs chan<- Worker) {
+func scheduleJob(payload HookPayload, jobs chan<- Worker, access_token *string) error {
+	err := checkAccessToken(access_token)
+	if err != nil {
+		return err
+	}
 	ts := helper.RndInt(MinWait, MaxWait)
 	delay := time.Duration(ts) * time.Second
 	jobs <- Worker{Payload: payload, Delay: delay}
+	return nil
 }

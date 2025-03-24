@@ -74,6 +74,26 @@ func renewSession(id string, tkn *string) (time.Time, error) {
 	return login.LastLogin, nil
 }
 
+func checkAccessToken(access_token *string) error {
+	login, err := queries.GetLoginDetails(ctx)
+
+	if err != nil {
+		return err
+	}
+	now := time.Now().Unix()
+	elapsed := now - login.LastLogin.Unix()
+
+	if elapsed > 2900 {
+		ts, err := renewSession(login.ID, access_token)
+		if err != nil {
+			return err
+		}
+		fmt.Println("refreshed session")
+		login.LastLogin = ts
+	}
+	return nil
+}
+
 func refresh_quota(id string) (time.Time, error) {
 	quota, err := queries.RefreshQuota(ctx, id)
 	if err != nil {

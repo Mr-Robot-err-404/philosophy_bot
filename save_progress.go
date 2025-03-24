@@ -6,20 +6,26 @@ import (
 )
 
 func saveProgress(replies []WiseReply) {
+	if len(replies) == 0 {
+		return
+	}
 	vids := unique_vids(replies)
 	err_resp := []error{}
 
+	printBreak()
 	for _, id := range vids {
 		video, err := queries.SaveVideo(ctx, id)
 		if err != nil {
 			err_resp = append(err_resp, err)
 			continue
 		}
-		fmt.Println("Saved vid -> ", video)
+		fmt.Println(video)
 	}
 	if len(err_resp) > 0 {
 		fmt.Println("ERR SAVING VID: ")
 	}
+	printBreak()
+
 	logErrors(err_resp)
 	err_resp = []error{}
 
@@ -30,8 +36,10 @@ func saveProgress(replies []WiseReply) {
 			err_resp = append(err_resp, err)
 			continue
 		}
-		fmt.Println("Saved reply -> ", item.Reply.Id)
+		fmt.Println(item.Reply.Id)
 	}
+	printBreak()
+
 	if len(err_resp) > 0 {
 		fmt.Println("ERR STORING REPLY: ")
 	}
