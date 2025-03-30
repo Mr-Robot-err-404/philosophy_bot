@@ -22,13 +22,18 @@ type ReadReq struct {
 	resp chan ServerState
 }
 
-type WriteCredentials struct {
-	credentials Credentials
-	resp        chan bool
+type WriteAccessToken struct {
+	access_token string
+	resp         chan bool
 }
 type WriteQuote struct {
 	quote database.Cornucopium
 	resp  chan bool
+}
+type Log struct {
+	msg string
+	err error
+	ts  time.Time
 }
 
 func evaluateXMLData(data string, jobs chan Worker) {
@@ -58,7 +63,7 @@ func evaluateXMLData(data string, jobs chan Worker) {
 	scheduleJob(payload, jobs)
 }
 
-func stateManager(initial ServerState, read chan ReadReq, wrCreds chan WriteCredentials, wrQuote chan WriteQuote) {
+func stateManager(initial ServerState, read chan ReadReq, wrCreds chan WriteAccessToken, wrQuote chan WriteQuote, logs chan Log) {
 	state := initial
 	for {
 		select {
@@ -66,17 +71,47 @@ func stateManager(initial ServerState, read chan ReadReq, wrCreds chan WriteCred
 			rd.resp <- state
 
 		case wr := <-wrCreds:
-			state.Credentials = wr.credentials
+			state.Credentials.access_token = wr.access_token
 			wr.resp <- true
 
 		case q := <-wrQuote:
 			state.Quotes = append(state.Quotes, q.quote)
 			q.resp <- true
+
+		case log := <-logs:
+			printLog(log)
+
+			size := len(state.LogHistory)
+			state.LogHistory = append(state.LogHistory, log)
+
+			if size >= 100 {
+				state.LogHistory = state.LogHistory[1:]
+			}
 		}
 	}
 }
 
-func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq) {
+func serverCronJob(wr chan<- WriteAccessToken, logs chan<- Log) {
+	ticker := time.NewTicker(50 * time.Minute)
+	for {
+		select {
+		case ts := <-ticker.C:
+			access_token, err := refresh_token()
+
+			if err != nil {
+				logs <- Log{err: err}
+				return
+			}
+			update := WriteAccessToken{access_token: access_token}
+			wr <- update
+			<-update.resp
+
+			logs <- Log{msg: fmt.Sprintf("Updated refresh token: %v\n", ts)}
+		}
+	}
+}
+
+func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq, logs chan<- Log) {
 	for task := range jobs {
 		var req ReadReq
 		rd <- req
@@ -87,7 +122,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq) {
 		channelId := curr.ChannelId
 
 		if curr.Err != nil {
-			fmt.Println("TASK ERR -> ", curr.Err)
+			logs <- Log{err: fmt.Errorf("Task err: %s\n", curr.Err.Error()), ts: time.Now()}
 			continue
 		}
 		stack := shuffleStack(resp.Quotes)
@@ -99,26 +134,28 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq) {
 		payload.Snippet.TopLevelComment.Snippet.TextOriginal = constructWisdom(q.Quote, q.Author)
 
 		info := CommentInfo{VideoId: videoId, ChannelId: channelId, QuoteId: q.ID, Payload: payload}
-		fmt.Println("RECEIVED TASK -> ", info)
+		logs <- Log{msg: fmt.Sprintf("Received task: %v\n", info), ts: time.Now()}
 
 		go executeTask(ch, info, resp.Credentials, task.Delay)
 	}
 }
 
-func receiveTaskResults(ch <-chan TaskResult) {
+func receiveTaskResults(ch <-chan TaskResult, logs chan<- Log) {
 	for result := range ch {
+		now := time.Now()
+
 		if result.Err != nil {
-			fmt.Println("RESULT ERR -> ", result.Err)
+			logs <- Log{err: fmt.Errorf("Task failed successfully: %s\n", result.Err.Error()), ts: now}
 			continue
 		}
 		params := database.CreateCommentParams{ID: result.Id, QuoteID: result.Info.QuoteId}
 		saved, err := queries.CreateComment(ctx, params)
 
 		if err != nil {
-			fmt.Println("SAVING FAIL: ", err)
+			logs <- Log{err: err, ts: now}
 			continue
 		}
-		fmt.Println("SAVED -> ", saved)
+		logs <- Log{msg: fmt.Sprintf("Posted comment: %v\n", saved), ts: now}
 	}
 }
 

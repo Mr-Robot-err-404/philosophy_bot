@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.ngrok.com/ngrok"
@@ -20,12 +21,14 @@ type Config struct {
 	jobs    chan Worker
 	rd      chan ReadReq
 	wrQuote chan WriteQuote
-	wrCreds chan WriteCredentials
+	wrTkn   chan WriteAccessToken
+	logs    chan Log
 }
 
 type ServerState struct {
 	Credentials Credentials
 	Quotes      []database.Cornucopium
+	LogHistory  []Log
 }
 
 type QuotePayload struct {
@@ -34,36 +37,31 @@ type QuotePayload struct {
 	Categories string `json:"categories,omitempty"`
 }
 
+// TODO: track quota
+// interval between comments
+
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
 const MinWait = 2 * 60
 const MaxWait = 10 * 60
 
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
-	read := ReadReq{}
-	cfg.rd <- read
-	state := <-read.resp
-
-	tkn := req.URL.Query().Get("hub.verify_token")
-
 	if req.Method == http.MethodGet {
 		challenge := req.URL.Query().Get("hub.challenge")
 		w.Write([]byte(challenge))
 		return
 	}
 	if req.Method != http.MethodPost {
-		fmt.Println("Invalid method -> ", req.Method)
+		cfg.logs <- Log{msg: fmt.Sprintf("Invalid method: %s\n", req.Method), ts: time.Now()}
 		server.ErrorResp(w, http.StatusMethodNotAllowed, "Invalid method")
-		return
-	}
-	if tkn != state.Credentials.bearer {
-		fmt.Println("Unauthorized token: ", tkn)
-		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		server.ErrorResp(w, http.StatusBadRequest, "Failed to read body")
+		msg := "Failed to read XML body"
+
+		cfg.logs <- Log{msg: msg, ts: time.Now()}
+		server.ErrorResp(w, http.StatusBadRequest, msg)
 		return
 	}
 	defer req.Body.Close()
@@ -74,7 +72,7 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	err = os.WriteFile("./tmp/"+fileName, body, 0644)
 
 	if err != nil {
-		fmt.Println("err saving file -> ", err)
+		cfg.logs <- Log{err: fmt.Errorf("Failed to save XML file: %s\n", err.Error()), ts: time.Now()}
 	}
 	server.SuccessResp(w, 200, "Accepted")
 }
@@ -116,12 +114,14 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 		Frequency:       1,
 		VideosSincePost: 0,
 	}
-	_, err = queries.CreateChannel(ctx, params)
+	created, err := queries.CreateChannel(ctx, params)
 
 	if err != nil {
 		server.ErrorResp(w, http.StatusInternalServerError, "Failed to create channel")
 		return
 	}
+	cfg.logs <- Log{msg: fmt.Sprintf("Created channel: %s\n", created.Handle)}
+
 	server.SuccessResp(w, http.StatusCreated, "Created channel")
 }
 
@@ -167,9 +167,23 @@ func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) 
 	cfg.wrQuote <- wr
 	<-wr.resp
 
-	fmt.Println("New quote saved to cache")
+	cfg.logs <- Log{msg: "New quote added", ts: time.Now()}
 
 	server.SuccessResp(w, http.StatusCreated, "Created Quote")
+}
+
+func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
+	read := ReadReq{}
+	cfg.rd <- read
+	state := <-read.resp
+
+	token, err := auth.GetBearerToken(req.Header)
+
+	if err != nil || token != state.Credentials.bearer {
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	server.SuccessResp(w, http.StatusOK, recentLogs(state.LogHistory))
 }
 
 func appHandler(prefix string, h http.Handler) http.Handler {
@@ -178,20 +192,23 @@ func appHandler(prefix string, h http.Handler) http.Handler {
 
 func startServer(credentials Credentials, quotes []database.Cornucopium) {
 	mux := http.NewServeMux()
-	state := ServerState{Credentials: credentials, Quotes: quotes}
 	cfg := Config{}
+	state := ServerState{Credentials: credentials, Quotes: quotes}
+
+	results := make(chan TaskResult)
 
 	cfg.jobs = make(chan Worker)
 	cfg.rd = make(chan ReadReq)
 	cfg.wrQuote = make(chan WriteQuote)
-	cfg.wrCreds = make(chan WriteCredentials)
-	results := make(chan TaskResult)
+	cfg.wrTkn = make(chan WriteAccessToken)
+	cfg.logs = make(chan Log)
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
 	mux.Handle("/app/", fileHnd)
 
 	mux.HandleFunc("POST /philosophy/channels", cfg.handlerCreateChannel)
 	mux.HandleFunc("POST /philosophy/quotes", cfg.handlerCreateQuote)
+	mux.HandleFunc("GET /philosophy/logs", cfg.logHistoryHandler)
 	mux.HandleFunc("/diogenes/bowl", cfg.handlerDiogenes)
 
 	listener, err := ngrok.Listen(ctx,
@@ -203,9 +220,10 @@ func startServer(credentials Credentials, quotes []database.Cornucopium) {
 	}
 	log.Println("App URL", listener.URL())
 
-	go stateManager(state, cfg.rd, cfg.wrCreds, cfg.wrQuote)
-	go receiveTaskResults(results)
-	go receiveJobs(cfg.jobs, results, cfg.rd)
+	go stateManager(state, cfg.rd, cfg.wrTkn, cfg.wrQuote, cfg.logs)
+	go receiveJobs(cfg.jobs, results, cfg.rd, cfg.logs)
+	go receiveTaskResults(results, cfg.logs)
+	go serverCronJob(cfg.wrTkn, cfg.logs)
 
 	err = http.Serve(listener, mux)
 	if err != nil {

@@ -8,6 +8,30 @@ import (
 
 const COMMENT_COST = 50
 
+func printLog(log Log) {
+	if log.err != nil {
+		fmt.Println(log.err)
+		return
+	}
+	fmt.Println(log.msg)
+}
+
+func recentLogs(slice []Log) []Log {
+	reversed := slice
+	start := 0
+	end := len(slice) - 1
+
+	for start < end && start < len(slice) && end >= 0 {
+		tmp := reversed[start]
+		reversed[start] = slice[end]
+		reversed[end] = tmp
+
+		start++
+		end--
+	}
+	return reversed
+}
+
 func filter(arr []string, vid_map map[string]bool) []string {
 	slice := []string{}
 	seen := make(map[string]string)
