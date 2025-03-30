@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 )
 
 type ReplyPayload struct {
@@ -36,6 +37,7 @@ type Credentials struct {
 	key          string
 	access_token string
 	bearer       string
+	last_refresh time.Time
 }
 
 func postReply(info ReplyInfo, credentials Credentials, ch chan<- ReplyStatus, wg *sync.WaitGroup) {

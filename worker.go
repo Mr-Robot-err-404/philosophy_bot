@@ -18,7 +18,20 @@ type TaskResult struct {
 	Err  error
 }
 
-func evaluateXMLData(data string, jobs chan Worker, access_token *string) {
+type ReadReq struct {
+	resp chan ServerState
+}
+
+type WriteCredentials struct {
+	credentials Credentials
+	resp        chan bool
+}
+type WriteQuote struct {
+	quote database.Cornucopium
+	resp  chan bool
+}
+
+func evaluateXMLData(data string, jobs chan Worker) {
 	payload := parseXML(data)
 
 	if !isXMLValid(payload) {
@@ -42,11 +55,33 @@ func evaluateXMLData(data string, jobs chan Worker, access_token *string) {
 		return
 	}
 	c = 0
-	scheduleJob(payload, jobs, access_token)
+	scheduleJob(payload, jobs)
 }
 
-func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, credentials *Credentials, quotes *[]database.Cornucopium) {
+func stateManager(initial ServerState, read chan ReadReq, wrCreds chan WriteCredentials, wrQuote chan WriteQuote) {
+	state := initial
+	for {
+		select {
+		case rd := <-read:
+			rd.resp <- state
+
+		case wr := <-wrCreds:
+			state.Credentials = wr.credentials
+			wr.resp <- true
+
+		case q := <-wrQuote:
+			state.Quotes = append(state.Quotes, q.quote)
+			q.resp <- true
+		}
+	}
+}
+
+func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq) {
 	for task := range jobs {
+		var req ReadReq
+		rd <- req
+		resp := <-req.resp
+
 		curr := task.Payload
 		videoId := curr.VideoId
 		channelId := curr.ChannelId
@@ -55,7 +90,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, credentials *Credenti
 			fmt.Println("TASK ERR -> ", curr.Err)
 			continue
 		}
-		stack := shuffleStack(*quotes)
+		stack := shuffleStack(resp.Quotes)
 		q := stack[0]
 
 		payload := CommentPayload{}
@@ -66,7 +101,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, credentials *Credenti
 		info := CommentInfo{VideoId: videoId, ChannelId: channelId, QuoteId: q.ID, Payload: payload}
 		fmt.Println("RECEIVED TASK -> ", info)
 
-		go executeTask(ch, info, *credentials, task.Delay)
+		go executeTask(ch, info, resp.Credentials, task.Delay)
 	}
 }
 
@@ -92,11 +127,7 @@ func executeTask(ch chan<- TaskResult, info CommentInfo, credentials Credentials
 	postComment(info, credentials, ch)
 }
 
-func scheduleJob(payload HookPayload, jobs chan<- Worker, access_token *string) error {
-	err := checkAccessToken(access_token)
-	if err != nil {
-		return err
-	}
+func scheduleJob(payload HookPayload, jobs chan<- Worker) error {
 	ts := helper.RndInt(MinWait, MaxWait)
 	delay := time.Duration(ts) * time.Second
 	jobs <- Worker{Payload: payload, Delay: delay}

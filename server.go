@@ -17,8 +17,14 @@ import (
 )
 
 type Config struct {
+	jobs    chan Worker
+	rd      chan ReadReq
+	wrQuote chan WriteQuote
+	wrCreds chan WriteCredentials
+}
+
+type ServerState struct {
 	Credentials Credentials
-	Jobs        chan Worker
 	Quotes      []database.Cornucopium
 }
 
@@ -34,6 +40,10 @@ const MinWait = 2 * 60
 const MaxWait = 10 * 60
 
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
+	read := ReadReq{}
+	cfg.rd <- read
+	state := <-read.resp
+
 	tkn := req.URL.Query().Get("hub.verify_token")
 
 	if req.Method == http.MethodGet {
@@ -46,7 +56,7 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 		server.ErrorResp(w, http.StatusMethodNotAllowed, "Invalid method")
 		return
 	}
-	if tkn != cfg.Credentials.bearer {
+	if tkn != state.Credentials.bearer {
 		fmt.Println("Unauthorized token: ", tkn)
 		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
 		return
@@ -57,7 +67,7 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer req.Body.Close()
-	evaluateXMLData(string(body), cfg.Jobs, &cfg.Credentials.access_token)
+	evaluateXMLData(string(body), cfg.jobs)
 
 	rndId := uuid.New().String()
 	fileName := rndId + ".xml"
@@ -70,9 +80,13 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 }
 
 func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request) {
+	read := ReadReq{}
+	cfg.rd <- read
+	state := <-read.resp
+
 	token, err := auth.GetBearerToken(req.Header)
 
-	if err != nil || token != cfg.Credentials.bearer {
+	if err != nil || token != state.Credentials.bearer {
 		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
@@ -82,7 +96,7 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 		server.ErrorResp(w, http.StatusBadRequest, "Invalid tag")
 		return
 	}
-	channel, err := getChannel(tag, cfg.Credentials.key)
+	channel, err := getChannel(tag, state.Credentials.key)
 
 	if err != nil {
 		server.ErrorResp(w, http.StatusBadRequest, "Failed to get channel")
@@ -90,7 +104,7 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 	}
 	callback := "https://" + req.Host + "/diogenes/bowl"
 
-	err = server.PostPubSub(channel.Id, Subscribe, callback, cfg.Credentials.bearer)
+	err = server.PostPubSub(channel.Id, Subscribe, callback, state.Credentials.bearer)
 	if err != nil {
 		server.ErrorResp(w, http.StatusBadRequest, err.Error())
 		return
@@ -112,9 +126,13 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 }
 
 func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) {
+	read := ReadReq{}
+	cfg.rd <- read
+	state := <-read.resp
+
 	token, err := auth.GetBearerToken(req.Header)
 
-	if err != nil || token != cfg.Credentials.bearer {
+	if err != nil || token != state.Credentials.bearer {
 		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
@@ -139,12 +157,18 @@ func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) 
 		categories = payload.Categories
 	}
 	params := database.CreateQuoteParams{ID: id, Quote: payload.Quote, Author: payload.Author, Categories: categories}
-	_, err = queries.CreateQuote(ctx, params)
+	quote, err := queries.CreateQuote(ctx, params)
 
 	if err != nil {
 		server.ErrorResp(w, http.StatusInternalServerError, "Failed to save quote")
 		return
 	}
+	wr := WriteQuote{quote: quote}
+	cfg.wrQuote <- wr
+	<-wr.resp
+
+	fmt.Println("New quote saved to cache")
+
 	server.SuccessResp(w, http.StatusCreated, "Created Quote")
 }
 
@@ -154,9 +178,13 @@ func appHandler(prefix string, h http.Handler) http.Handler {
 
 func startServer(credentials Credentials, quotes []database.Cornucopium) {
 	mux := http.NewServeMux()
-	cfg := Config{Credentials: credentials, Quotes: quotes}
+	state := ServerState{Credentials: credentials, Quotes: quotes}
+	cfg := Config{}
 
-	cfg.Jobs = make(chan Worker)
+	cfg.jobs = make(chan Worker)
+	cfg.rd = make(chan ReadReq)
+	cfg.wrQuote = make(chan WriteQuote)
+	cfg.wrCreds = make(chan WriteCredentials)
 	results := make(chan TaskResult)
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
@@ -175,8 +203,9 @@ func startServer(credentials Credentials, quotes []database.Cornucopium) {
 	}
 	log.Println("App URL", listener.URL())
 
+	go stateManager(state, cfg.rd, cfg.wrCreds, cfg.wrQuote)
 	go receiveTaskResults(results)
-	go receiveJobs(cfg.Jobs, results, &cfg.Credentials, &cfg.Quotes)
+	go receiveJobs(cfg.jobs, results, cfg.rd)
 
 	err = http.Serve(listener, mux)
 	if err != nil {
