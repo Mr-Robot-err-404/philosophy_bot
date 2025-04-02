@@ -18,17 +18,15 @@ import (
 )
 
 type Config struct {
-	jobs    chan Worker
-	rd      chan ReadReq
-	wrQuote chan WriteQuote
-	wrTkn   chan WriteAccessToken
-	logs    chan Log
+	jobs  chan Worker
+	comms Comms
 }
 
 type ServerState struct {
 	Credentials Credentials
 	Quotes      []database.Cornucopium
 	LogHistory  []Log
+	QuotaPoints int
 }
 
 type QuotePayload struct {
@@ -36,9 +34,21 @@ type QuotePayload struct {
 	Quote      string `json:"quote"`
 	Categories string `json:"categories,omitempty"`
 }
+type Comms struct {
+	rd          chan ReadReq
+	writeWisdom chan WriteQuote
+	writeTkn    chan WriteAccessToken
+	logs        chan Log
+	points      chan UpdateQuotaPoints
+}
 
 // TODO: track quota
-// interval between comments
+//  -> Calculate quota margins before batch update
+//  -> Combine quota cron job with trending cron
+
+// TODO:
+// pubsub cron job - refresh subscriptions
+// channel frequency
 
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
@@ -46,13 +56,16 @@ const MinWait = 2 * 60
 const MaxWait = 10 * 60
 
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
+	comms := cfg.comms
+	state := readServerState(comms.rd)
+
 	if req.Method == http.MethodGet {
 		challenge := req.URL.Query().Get("hub.challenge")
 		w.Write([]byte(challenge))
 		return
 	}
 	if req.Method != http.MethodPost {
-		cfg.logs <- Log{msg: fmt.Sprintf("Invalid method: %s\n", req.Method), ts: time.Now()}
+		comms.logs <- Log{msg: fmt.Sprintf("Invalid method: %s\n", req.Method), ts: time.Now()}
 		server.ErrorResp(w, http.StatusMethodNotAllowed, "Invalid method")
 		return
 	}
@@ -60,27 +73,26 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		msg := "Failed to read XML body"
 
-		cfg.logs <- Log{msg: msg, ts: time.Now()}
+		comms.logs <- Log{msg: msg, ts: time.Now()}
 		server.ErrorResp(w, http.StatusBadRequest, msg)
 		return
 	}
 	defer req.Body.Close()
-	evaluateXMLData(string(body), cfg.jobs)
+	evaluateXMLData(string(body), cfg.jobs, cfg.comms.logs, state.QuotaPoints, cfg.comms.points)
 
 	rndId := uuid.New().String()
 	fileName := rndId + ".xml"
-	err = os.WriteFile("./tmp/"+fileName, body, 0644)
+	err = os.WriteFile("./tmp/xml/"+fileName, body, 0644)
 
 	if err != nil {
-		cfg.logs <- Log{err: fmt.Errorf("Failed to save XML file: %s\n", err.Error()), ts: time.Now()}
+		comms.logs <- Log{err: fmt.Errorf("Failed to save XML file: %s\n", err.Error()), ts: time.Now()}
 	}
 	server.SuccessResp(w, 200, "Accepted")
 }
 
 func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request) {
-	read := ReadReq{}
-	cfg.rd <- read
-	state := <-read.resp
+	comms := cfg.comms
+	state := readServerState(comms.rd)
 
 	token, err := auth.GetBearerToken(req.Header)
 
@@ -120,15 +132,14 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 		server.ErrorResp(w, http.StatusInternalServerError, "Failed to create channel")
 		return
 	}
-	cfg.logs <- Log{msg: fmt.Sprintf("Created channel: %s\n", created.Handle)}
+	comms.logs <- Log{msg: fmt.Sprintf("Created channel: %s\n", created.Handle)}
 
 	server.SuccessResp(w, http.StatusCreated, "Created channel")
 }
 
 func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) {
-	read := ReadReq{}
-	cfg.rd <- read
-	state := <-read.resp
+	comms := cfg.comms
+	state := readServerState(comms.rd)
 
 	token, err := auth.GetBearerToken(req.Header)
 
@@ -163,19 +174,18 @@ func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) 
 		server.ErrorResp(w, http.StatusInternalServerError, "Failed to save quote")
 		return
 	}
-	wr := WriteQuote{quote: quote}
-	cfg.wrQuote <- wr
+	wr := WriteQuote{quote: quote, resp: make(chan bool)}
+	comms.writeWisdom <- wr
 	<-wr.resp
 
-	cfg.logs <- Log{msg: "New quote added", ts: time.Now()}
+	comms.logs <- Log{msg: "New quote added", ts: time.Now()}
 
 	server.SuccessResp(w, http.StatusCreated, "Created Quote")
 }
 
 func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
-	read := ReadReq{}
-	cfg.rd <- read
-	state := <-read.resp
+	comms := cfg.comms
+	state := readServerState(comms.rd)
 
 	token, err := auth.GetBearerToken(req.Header)
 
@@ -186,22 +196,38 @@ func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
 	server.SuccessResp(w, http.StatusOK, recentLogs(state.LogHistory))
 }
 
+func (cfg *Config) QuotaPointsHandler(w http.ResponseWriter, req *http.Request) {
+	comms := cfg.comms
+	state := readServerState(comms.rd)
+	token, err := auth.GetBearerToken(req.Header)
+
+	if err != nil || token != state.Credentials.bearer {
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	server.SuccessResp(w, http.StatusOK, state.QuotaPoints)
+}
+
 func appHandler(prefix string, h http.Handler) http.Handler {
 	return http.StripPrefix(prefix, h)
 }
 
-func startServer(credentials Credentials, quotes []database.Cornucopium) {
+func startServer(credentials Credentials, quotes []database.Cornucopium, channels []database.Channel) {
 	mux := http.NewServeMux()
+
 	cfg := Config{}
-	state := ServerState{Credentials: credentials, Quotes: quotes}
+	comms := Comms{}
+	serverState := ServerState{Credentials: credentials, Quotes: quotes, QuotaPoints: 10000}
 
 	results := make(chan TaskResult)
+	comms.rd = make(chan ReadReq)
+	comms.writeWisdom = make(chan WriteQuote)
+	comms.writeTkn = make(chan WriteAccessToken)
+	comms.logs = make(chan Log)
+	comms.points = make(chan UpdateQuotaPoints)
 
 	cfg.jobs = make(chan Worker)
-	cfg.rd = make(chan ReadReq)
-	cfg.wrQuote = make(chan WriteQuote)
-	cfg.wrTkn = make(chan WriteAccessToken)
-	cfg.logs = make(chan Log)
+	cfg.comms = comms
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
 	mux.Handle("/app/", fileHnd)
@@ -220,10 +246,16 @@ func startServer(credentials Credentials, quotes []database.Cornucopium) {
 	}
 	log.Println("App URL", listener.URL())
 
-	go stateManager(state, cfg.rd, cfg.wrTkn, cfg.wrQuote, cfg.logs)
-	go receiveJobs(cfg.jobs, results, cfg.rd, cfg.logs)
-	go receiveTaskResults(results, cfg.logs)
-	go serverCronJob(cfg.wrTkn, cfg.logs)
+	callback := listener.URL() + "/diogenes/bowl"
+	err = subscribeToChannels(channels, callback, credentials.bearer)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	go stateManager(serverState, comms)
+	go receiveJobs(cfg.jobs, results, cfg.comms.rd, cfg.comms.logs)
+	go receiveTaskResults(results, cfg.comms.logs)
+	go serverCronJob(cfg.comms.writeTkn, cfg.comms.logs)
 
 	err = http.Serve(listener, mux)
 	if err != nil {

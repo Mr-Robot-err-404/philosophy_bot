@@ -9,76 +9,105 @@ import (
 type HookPayload struct {
 	ChannelId string
 	VideoId   string
-	Published time.Time
+	Published TimeData
+	Updated   TimeData
 	Err       error
+}
+
+type TimeData struct {
+	Exists bool
+	Time   time.Time
 }
 
 func parseXML(data string) HookPayload {
 	var payload HookPayload
 	lines := strings.Split(data, "\n")
-	seen := false
+	entry := false
 
 	for _, curr := range lines {
+		if payload.Err != nil {
+			break
+		}
 		s := strings.TrimSpace(curr)
 
-		if strings.Contains(s, "yt:videoId") {
-			payload.VideoId = parseId(s)
+		if strings.Contains(s, "<entry>") {
+			entry = true
+		}
+		if entry != true {
 			continue
 		}
-		if strings.Contains(s, "yt:channelId") {
-			payload.ChannelId = parseId(s)
+		if strings.Contains(s, "</entry>") {
+			break
 		}
-		if strings.Contains(s, "published") {
-			seen = true
-			str := parseId(s)
+		if strings.Contains(s, "<yt:videoId>") {
+			payload.VideoId = parseId(s, "<yt:videoId>")
+		}
+		if strings.Contains(s, "<yt:channelId>") {
+			payload.ChannelId = parseId(s, "<yt:channelId>")
+		}
+		if strings.Contains(s, "<published>") {
+			str := parseId(s, "<published>")
 
 			ts, err := time.Parse(time.RFC3339Nano, str)
 			if err != nil {
 				payload.Err = err
 				continue
 			}
-			payload.Published = ts
+			payload.Published = TimeData{Time: ts, Exists: true}
 		}
-		if len(payload.ChannelId) > 0 && len(payload.VideoId) > 0 && seen {
-			break
+		if strings.Contains(s, "<updated>") {
+			str := parseId(s, "<updated>")
+
+			ts, err := time.Parse(time.RFC3339Nano, str)
+			if err != nil {
+				payload.Err = err
+				continue
+			}
+			payload.Updated = TimeData{Time: ts, Exists: true}
 		}
 	}
-	if payload.Err != nil && (len(payload.ChannelId) == 0 || len(payload.VideoId) == 0) {
-		payload.Err = fmt.Errorf("%s\n", "Failed to parse ID from XML data")
-	}
+	payload.Err = validateXMLData(payload)
 	return payload
 }
 
 func isPublished(payload HookPayload) bool {
 	now := time.Now().Unix()
-	diff := now - payload.Published.Unix()
+	diff := now - payload.Published.Time.Unix()
 
-	if diff > MaxWait {
+	if diff > 3600 {
 		return false
 	}
 	return true
 }
 
-func isXMLValid(payload HookPayload) bool {
+func validateXMLData(payload HookPayload) error {
 	if payload.Err != nil {
-		return true
+		return payload.Err
 	}
-	if len(payload.ChannelId) == 0 || len(payload.VideoId) == 0 {
-		return false
+	if len(payload.ChannelId) == 0 {
+		return fmt.Errorf("%s\n", "ChannelId not found")
 	}
-	return true
+	if len(payload.VideoId) == 0 {
+		return fmt.Errorf("%s\n", " not found")
+	}
+	if !payload.Published.Exists {
+		return fmt.Errorf("%s\n", "Published date does not exist in XML data")
+	}
+	if payload.Updated.Exists {
+		published := payload.Published.Time
+		updated := payload.Updated.Time
+		return fmt.Errorf("Video already published. Published: %v, Updated: %v\n", published, updated)
+	}
+	return nil
 }
 
-func parseId(s string) string {
-	start := 0
-	end := len(s)
-
-	for i := range s {
-		start++
-		if s[i] == '>' {
-			break
-		}
+func parseId(s string, tag string) string {
+	start := startIdx(s, tag)
+	if start == -1 {
+		return ""
 	}
+	end := start
+
 	for i := start; i < len(s); i++ {
 		end = i
 		if s[i] == '<' {
@@ -86,4 +115,21 @@ func parseId(s string) string {
 		}
 	}
 	return s[start:end]
+}
+
+func startIdx(str string, subStr string) int {
+	for i := range str {
+		end := i + len(subStr)
+
+		if end > len(str) {
+			return -1
+		}
+		tmp := str[i:end]
+
+		if tmp != subStr {
+			continue
+		}
+		return end
+	}
+	return -1
 }

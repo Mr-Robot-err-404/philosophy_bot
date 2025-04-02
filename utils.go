@@ -13,6 +13,9 @@ func printLog(log Log) {
 		fmt.Println(log.err)
 		return
 	}
+	if len(log.msg) == 0 {
+		return
+	}
 	fmt.Println(log.msg)
 }
 

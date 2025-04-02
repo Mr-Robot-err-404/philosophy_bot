@@ -21,7 +21,6 @@ type TaskResult struct {
 type ReadReq struct {
 	resp chan ServerState
 }
-
 type WriteAccessToken struct {
 	access_token string
 	resp         chan bool
@@ -30,27 +29,31 @@ type WriteQuote struct {
 	quote database.Cornucopium
 	resp  chan bool
 }
+type UpdateQuotaPoints struct {
+	value int
+	resp  chan bool
+}
 type Log struct {
 	msg string
 	err error
 	ts  time.Time
 }
 
-func evaluateXMLData(data string, jobs chan Worker) {
+func evaluateXMLData(data string, jobs chan Worker, logs chan Log, points int, cost chan UpdateQuotaPoints) {
 	payload := parseXML(data)
 
-	if !isXMLValid(payload) {
-		fmt.Printf("Invalid XML payload: %v\n", payload)
+	if payload.Err != nil {
+		logs <- Log{err: payload.Err}
 		return
 	}
-	if payload.Err != nil {
-		fmt.Println(payload.Err)
+	if points < 500 {
+		logs <- Log{msg: "Insufficient quota points"}
 		return
 	}
 	channel, err := queries.FindChannel(ctx, payload.ChannelId)
 
 	if err != nil {
-		fmt.Printf("Couldn't find channel. ID: %s\n", payload.ChannelId)
+		logs <- Log{err: fmt.Errorf("Couldn't find channel. ID: %s\n", payload.ChannelId)}
 		return
 	}
 	c := channel.VideosSincePost + 1
@@ -60,25 +63,25 @@ func evaluateXMLData(data string, jobs chan Worker) {
 		return
 	}
 	c = 0
+
 	scheduleJob(payload, jobs)
+	cost <- UpdateQuotaPoints{value: points - 50}
 }
 
-func stateManager(initial ServerState, read chan ReadReq, wrCreds chan WriteAccessToken, wrQuote chan WriteQuote, logs chan Log) {
+func stateManager(initial ServerState, comms Comms) {
 	state := initial
 	for {
 		select {
-		case rd := <-read:
+		case rd := <-comms.rd:
 			rd.resp <- state
 
-		case wr := <-wrCreds:
+		case wr := <-comms.writeTkn:
 			state.Credentials.access_token = wr.access_token
-			wr.resp <- true
 
-		case q := <-wrQuote:
+		case q := <-comms.writeWisdom:
 			state.Quotes = append(state.Quotes, q.quote)
-			q.resp <- true
 
-		case log := <-logs:
+		case log := <-comms.logs:
 			printLog(log)
 
 			size := len(state.LogHistory)
@@ -87,6 +90,8 @@ func stateManager(initial ServerState, read chan ReadReq, wrCreds chan WriteAcce
 			if size >= 100 {
 				state.LogHistory = state.LogHistory[1:]
 			}
+		case cost := <-comms.points:
+			state.QuotaPoints = cost.value
 		}
 	}
 }
@@ -102,7 +107,7 @@ func serverCronJob(wr chan<- WriteAccessToken, logs chan<- Log) {
 				logs <- Log{err: err}
 				return
 			}
-			update := WriteAccessToken{access_token: access_token}
+			update := WriteAccessToken{access_token: access_token, resp: make(chan bool)}
 			wr <- update
 			<-update.resp
 
@@ -113,9 +118,7 @@ func serverCronJob(wr chan<- WriteAccessToken, logs chan<- Log) {
 
 func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq, logs chan<- Log) {
 	for task := range jobs {
-		var req ReadReq
-		rd <- req
-		resp := <-req.resp
+		state := readServerState(rd)
 
 		curr := task.Payload
 		videoId := curr.VideoId
@@ -125,7 +128,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq, logs
 			logs <- Log{err: fmt.Errorf("Task err: %s\n", curr.Err.Error()), ts: time.Now()}
 			continue
 		}
-		stack := shuffleStack(resp.Quotes)
+		stack := shuffleStack(state.Quotes)
 		q := stack[0]
 
 		payload := CommentPayload{}
@@ -136,7 +139,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq, logs
 		info := CommentInfo{VideoId: videoId, ChannelId: channelId, QuoteId: q.ID, Payload: payload}
 		logs <- Log{msg: fmt.Sprintf("Received task: %v\n", info), ts: time.Now()}
 
-		go executeTask(ch, info, resp.Credentials, task.Delay)
+		go executeTask(ch, info, state.Credentials, task.Delay)
 	}
 }
 
