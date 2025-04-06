@@ -34,7 +34,7 @@ func getChannel(s string, key string) (ChannelItem, error) {
 		return ChannelItem{}, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return ChannelItem{}, fmt.Errorf("%s\n", resp.Status)
+		return ChannelItem{}, fmt.Errorf("%s", resp.Status)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)

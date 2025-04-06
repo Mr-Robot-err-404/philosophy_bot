@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 )
 
@@ -23,15 +25,29 @@ func main() {
 	cmd.Parse(os.Args[1:])
 
 	if *dev_mode {
-		file, err := os.ReadFile("./tmp/xml/cd2e86ea-183a-45be-89f3-7eb33caa8ac8.xml")
+		file, err := os.ReadFile("./tmp/xml/bb536210-f268-4651-9389-9b0e57f7d444.xml")
 		if err != nil {
 			log.Fatal(err)
+			return
 		}
-		payload := parseXML(string(file))
+		endpoint := "https://" + "a8f4-81-140-55-53.ngrok-free.app" + "/diogenes/bowl"
+		body_reader := bytes.NewReader(file)
 
-		if payload.Err != nil {
-			fmt.Println(payload.Err)
+		request, err := http.NewRequest(http.MethodPost, endpoint, body_reader)
+		request.Header.Set("Content-Type", "application/xml")
+
+		if err != nil {
+			log.Fatal(err)
+			return
 		}
+		client := &http.Client{}
+		resp, err := client.Do(request)
+
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		fmt.Println(resp.Status)
 		return
 	}
 	sisyphus()

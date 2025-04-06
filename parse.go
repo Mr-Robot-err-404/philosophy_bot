@@ -70,33 +70,23 @@ func parseXML(data string) HookPayload {
 	return payload
 }
 
-func isPublished(payload HookPayload) bool {
-	now := time.Now().Unix()
-	diff := now - payload.Published.Time.Unix()
-
-	if diff > 3600 {
-		return false
-	}
-	return true
-}
-
 func validateXMLData(payload HookPayload) error {
 	if payload.Err != nil {
 		return payload.Err
 	}
 	if len(payload.ChannelId) == 0 {
-		return fmt.Errorf("%s\n", "ChannelId not found")
+		return fmt.Errorf("%s", "ChannelId not found")
 	}
 	if len(payload.VideoId) == 0 {
-		return fmt.Errorf("%s\n", " not found")
+		return fmt.Errorf("%s", " not found")
 	}
 	if !payload.Published.Exists {
-		return fmt.Errorf("%s\n", "Published date does not exist in XML data")
+		return fmt.Errorf("%s", "Published date does not exist in XML data")
 	}
 	if payload.Updated.Exists {
 		published := payload.Published.Time
 		updated := payload.Updated.Time
-		return fmt.Errorf("Video already published. Published: %v, Updated: %v\n", published, updated)
+		return fmt.Errorf("Video already published. Published: %v, Updated: %v", published, updated)
 	}
 	return nil
 }

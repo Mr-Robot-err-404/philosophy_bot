@@ -43,7 +43,7 @@ func findCommentThread(video_id string, key string, ch chan<- ThreadSearch, wg *
 		return
 	}
 	if resp.StatusCode != 200 {
-		ch <- ThreadSearch{Err: fmt.Errorf("%s\n", resp.Status)}
+		ch <- ThreadSearch{Err: fmt.Errorf("%s", resp.Status)}
 		return
 	}
 	defer resp.Body.Close()

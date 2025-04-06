@@ -8,18 +8,24 @@ import (
 
 const COMMENT_COST = 50
 
-func printLog(log Log) {
-	if log.err != nil {
-		fmt.Println(log.err)
-		return
-	}
-	if len(log.msg) == 0 {
-		return
-	}
-	fmt.Println(log.msg)
+type JsonLog struct {
+	Msg string `json:"msg,omitempty"`
+	Err string `json:"err,omitempty"`
+	Ts  string `json:"time"`
 }
 
-func recentLogs(slice []Log) []Log {
+func printLog(log Log) {
+	if log.Err != nil {
+		fmt.Println(log.Err)
+		return
+	}
+	if len(log.Msg) == 0 {
+		return
+	}
+	fmt.Println(log.Msg)
+}
+
+func recentLogs(slice []Log) []JsonLog {
 	reversed := slice
 	start := 0
 	end := len(slice) - 1
@@ -32,7 +38,15 @@ func recentLogs(slice []Log) []Log {
 		start++
 		end--
 	}
-	return reversed
+	return JsonLogs(reversed)
+}
+
+func JsonLogs(logs []Log) []JsonLog {
+	slice := make([]JsonLog, len(logs))
+	for i, log := range logs {
+		slice[i] = JsonLog{Msg: log.Msg, Ts: log.Ts.String(), Err: log.Err.Error()}
+	}
+	return slice
 }
 
 func filter(arr []string, vid_map map[string]bool) []string {
@@ -52,21 +66,6 @@ func filter(arr []string, vid_map map[string]bool) []string {
 		slice = append(slice, s)
 	}
 	return slice
-}
-
-func filterUnique(arr []string) []string {
-	seen := make(map[string]bool)
-	unique := []string{}
-
-	for _, s := range arr {
-		_, exists := seen[s]
-		if exists {
-			continue
-		}
-		seen[s] = true
-		unique = append(unique, s)
-	}
-	return unique
 }
 
 func makeLikeMap(replies []database.Reply) map[string]int {
@@ -150,10 +149,4 @@ func logErrors(slice []error) {
 
 func printBreak() {
 	fmt.Println("---------")
-}
-
-func logSlice(slice []string) {
-	for _, s := range slice {
-		fmt.Println(s)
-	}
 }

@@ -58,7 +58,7 @@ func postComment(info CommentInfo, credentials Credentials, ch chan<- TaskResult
 		return
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		ch <- TaskResult{Err: fmt.Errorf("%s\n", resp.Status)}
+		ch <- TaskResult{Err: fmt.Errorf("%s", resp.Status)}
 		return
 	}
 	defer resp.Body.Close()

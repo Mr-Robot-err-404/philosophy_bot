@@ -69,7 +69,7 @@ func postReply(info ReplyInfo, credentials Credentials, ch chan<- ReplyStatus, w
 		return
 	}
 	if resp.StatusCode != 200 && resp.StatusCode != 201 {
-		ch <- ReplyStatus{Err: fmt.Errorf("%s\n", resp.Status)}
+		ch <- ReplyStatus{Err: fmt.Errorf("%s", resp.Status)}
 		return
 	}
 	defer resp.Body.Close()

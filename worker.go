@@ -34,32 +34,38 @@ type UpdateQuotaPoints struct {
 	resp  chan bool
 }
 type Log struct {
-	msg string
-	err error
-	ts  time.Time
+	Msg string
+	Err error
+	Ts  time.Time
 }
 
 func evaluateXMLData(data string, jobs chan Worker, logs chan Log, points int, cost chan UpdateQuotaPoints) {
 	payload := parseXML(data)
 
 	if payload.Err != nil {
-		logs <- Log{err: payload.Err}
+		logs <- Log{Err: payload.Err}
 		return
 	}
+	printBreak()
+	fmt.Println("CHANNEL_ID -> ", payload.ChannelId)
+	fmt.Println("VIDEO_ID   -> ", payload.VideoId)
+	fmt.Println("PUBLISHED   -> ", payload.Published.Time)
+
 	if points < 500 {
-		logs <- Log{msg: "Insufficient quota points"}
+		logs <- Log{Msg: "Insufficient quota points"}
 		return
 	}
 	channel, err := queries.FindChannel(ctx, payload.ChannelId)
 
 	if err != nil {
-		logs <- Log{err: fmt.Errorf("Couldn't find channel. ID: %s\n", payload.ChannelId)}
+		logs <- Log{Err: fmt.Errorf("Couldn't find channel. ID: %s\n", payload.ChannelId)}
 		return
 	}
 	c := channel.VideosSincePost + 1
 	defer cleanup(&c, channel.ID)
 
 	if c < channel.Frequency {
+		fmt.Println("Freq too low: ", c)
 		return
 	}
 	c = 0
@@ -99,20 +105,31 @@ func stateManager(initial ServerState, comms Comms) {
 func serverCronJob(wr chan<- WriteAccessToken, logs chan<- Log) {
 	ticker := time.NewTicker(50 * time.Minute)
 	for {
-		select {
-		case ts := <-ticker.C:
-			access_token, err := refresh_token()
+		<-ticker.C
+		access_token, err := refresh_token()
 
-			if err != nil {
-				logs <- Log{err: err}
-				return
-			}
-			update := WriteAccessToken{access_token: access_token, resp: make(chan bool)}
-			wr <- update
-			<-update.resp
-
-			logs <- Log{msg: fmt.Sprintf("Updated refresh token: %v\n", ts)}
+		if err != nil {
+			logs <- Log{Err: err}
+			return
 		}
+		update := WriteAccessToken{access_token: access_token, resp: make(chan bool)}
+		wr <- update
+
+		logs <- Log{Msg: fmt.Sprintf("%s", "Updated refresh token")}
+	}
+}
+
+func renewSubscription(logs chan<- Log, callback string, bearer string) {
+	ticker := time.NewTicker(4 * 24 * time.Hour)
+	for {
+		<-ticker.C
+		channels, err := queries.GetChannels(ctx)
+
+		if err != nil {
+			logs <- Log{Err: err}
+			continue
+		}
+		subscribeToChannels(channels, callback, bearer, logs)
 	}
 }
 
@@ -125,7 +142,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq, logs
 		channelId := curr.ChannelId
 
 		if curr.Err != nil {
-			logs <- Log{err: fmt.Errorf("Task err: %s\n", curr.Err.Error()), ts: time.Now()}
+			logs <- Log{Err: fmt.Errorf("Task err: %s", curr.Err.Error())}
 			continue
 		}
 		stack := shuffleStack(state.Quotes)
@@ -137,7 +154,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq, logs
 		payload.Snippet.TopLevelComment.Snippet.TextOriginal = constructWisdom(q.Quote, q.Author)
 
 		info := CommentInfo{VideoId: videoId, ChannelId: channelId, QuoteId: q.ID, Payload: payload}
-		logs <- Log{msg: fmt.Sprintf("Received task: %v\n", info), ts: time.Now()}
+		logs <- Log{Msg: fmt.Sprintf("Received task: %v", info)}
 
 		go executeTask(ch, info, state.Credentials, task.Delay)
 	}
@@ -145,20 +162,18 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, rd chan ReadReq, logs
 
 func receiveTaskResults(ch <-chan TaskResult, logs chan<- Log) {
 	for result := range ch {
-		now := time.Now()
-
 		if result.Err != nil {
-			logs <- Log{err: fmt.Errorf("Task failed successfully: %s\n", result.Err.Error()), ts: now}
+			logs <- Log{Err: fmt.Errorf("Task failed successfully: %s", result.Err.Error())}
 			continue
 		}
 		params := database.CreateCommentParams{ID: result.Id, QuoteID: result.Info.QuoteId}
 		saved, err := queries.CreateComment(ctx, params)
 
 		if err != nil {
-			logs <- Log{err: err, ts: now}
+			logs <- Log{Err: err}
 			continue
 		}
-		logs <- Log{msg: fmt.Sprintf("Posted comment: %v\n", saved), ts: now}
+		logs <- Log{Msg: fmt.Sprintf("Posted comment: %v", saved)}
 	}
 }
 
@@ -168,6 +183,7 @@ func executeTask(ch chan<- TaskResult, info CommentInfo, credentials Credentials
 }
 
 func scheduleJob(payload HookPayload, jobs chan<- Worker) error {
+	fmt.Println("job scheduled")
 	ts := helper.RndInt(MinWait, MaxWait)
 	delay := time.Duration(ts) * time.Second
 	jobs <- Worker{Payload: payload, Delay: delay}

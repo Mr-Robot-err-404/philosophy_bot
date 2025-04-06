@@ -38,9 +38,8 @@ func saveProgress(replies []WiseReply) {
 		}
 		fmt.Println(item.Reply.Id)
 	}
-	printBreak()
-
 	if len(err_resp) > 0 {
+		printBreak()
 		fmt.Println("ERR STORING REPLY: ")
 	}
 	logErrors(err_resp)

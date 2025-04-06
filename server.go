@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.ngrok.com/ngrok"
@@ -47,8 +46,8 @@ type Comms struct {
 //  -> Combine quota cron job with trending cron
 
 // TODO:
-// pubsub cron job - refresh subscriptions
 // channel frequency
+// never repeat a quote on a channel
 
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
@@ -56,6 +55,10 @@ const MinWait = 2 * 60
 const MaxWait = 10 * 60
 
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
+	printBreak()
+	fmt.Println("METHOD: ", req.Method)
+	fmt.Println("QUERY:  ", req.URL.Query())
+
 	comms := cfg.comms
 	state := readServerState(comms.rd)
 
@@ -64,16 +67,10 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte(challenge))
 		return
 	}
-	if req.Method != http.MethodPost {
-		comms.logs <- Log{msg: fmt.Sprintf("Invalid method: %s\n", req.Method), ts: time.Now()}
-		server.ErrorResp(w, http.StatusMethodNotAllowed, "Invalid method")
-		return
-	}
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		msg := "Failed to read XML body"
-
-		comms.logs <- Log{msg: msg, ts: time.Now()}
+		comms.logs <- Log{Msg: msg}
 		server.ErrorResp(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -85,7 +82,7 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	err = os.WriteFile("./tmp/xml/"+fileName, body, 0644)
 
 	if err != nil {
-		comms.logs <- Log{err: fmt.Errorf("Failed to save XML file: %s\n", err.Error()), ts: time.Now()}
+		comms.logs <- Log{Err: fmt.Errorf("Failed to save XML file: %s", err.Error())}
 	}
 	server.SuccessResp(w, 200, "Accepted")
 }
@@ -132,9 +129,47 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 		server.ErrorResp(w, http.StatusInternalServerError, "Failed to create channel")
 		return
 	}
-	comms.logs <- Log{msg: fmt.Sprintf("Created channel: %s\n", created.Handle)}
+	comms.logs <- Log{Msg: fmt.Sprintf("Created channel: %s", created.Handle)}
 
 	server.SuccessResp(w, http.StatusCreated, "Created channel")
+}
+
+func (cfg *Config) handlerDeleteChannel(w http.ResponseWriter, req *http.Request) {
+	comms := cfg.comms
+	state := readServerState(comms.rd)
+
+	token, err := auth.GetBearerToken(req.Header)
+
+	if err != nil || token != state.Credentials.bearer {
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+	id := req.URL.Query().Get("id")
+
+	if len(id) == 0 {
+		server.ErrorResp(w, http.StatusBadRequest, "Channel ID required")
+		return
+	}
+	channel, err := queries.FindChannel(ctx, id)
+
+	if err != nil || len(channel.ID) == 0 {
+		server.ErrorResp(w, http.StatusNotFound, "Channel ID not found")
+		return
+	}
+	callback := "https://" + req.Host + "/diogenes/bowl"
+	err = server.PostPubSub(channel.ID, Unsubscribe, callback, state.Credentials.bearer)
+
+	if err != nil {
+		server.ErrorResp(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	_, err = queries.DeleteChannel(ctx, channel.ID)
+
+	if err != nil {
+		server.ErrorResp(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	server.SuccessResp(w, http.StatusAccepted, fmt.Sprintf("Deleted channel: %s", channel.Handle))
 }
 
 func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) {
@@ -178,7 +213,7 @@ func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) 
 	comms.writeWisdom <- wr
 	<-wr.resp
 
-	comms.logs <- Log{msg: "New quote added", ts: time.Now()}
+	comms.logs <- Log{Msg: "New quote added"}
 
 	server.SuccessResp(w, http.StatusCreated, "Created Quote")
 }
@@ -233,8 +268,10 @@ func startServer(credentials Credentials, quotes []database.Cornucopium, channel
 	mux.Handle("/app/", fileHnd)
 
 	mux.HandleFunc("POST /philosophy/channels", cfg.handlerCreateChannel)
+	mux.HandleFunc("DELETE /philosophy/channels", cfg.handlerDeleteChannel)
 	mux.HandleFunc("POST /philosophy/quotes", cfg.handlerCreateQuote)
 	mux.HandleFunc("GET /philosophy/logs", cfg.logHistoryHandler)
+	mux.HandleFunc("GET /philosophy/points", cfg.QuotaPointsHandler)
 	mux.HandleFunc("/diogenes/bowl", cfg.handlerDiogenes)
 
 	listener, err := ngrok.Listen(ctx,
@@ -247,15 +284,15 @@ func startServer(credentials Credentials, quotes []database.Cornucopium, channel
 	log.Println("App URL", listener.URL())
 
 	callback := listener.URL() + "/diogenes/bowl"
-	err = subscribeToChannels(channels, callback, credentials.bearer)
 
-	if err != nil {
-		log.Fatal(err)
-	}
 	go stateManager(serverState, comms)
 	go receiveJobs(cfg.jobs, results, cfg.comms.rd, cfg.comms.logs)
 	go receiveTaskResults(results, cfg.comms.logs)
 	go serverCronJob(cfg.comms.writeTkn, cfg.comms.logs)
+	go renewSubscription(cfg.comms.logs, callback, credentials.bearer)
+
+	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
+	defer unsubscribeChannels(callback, credentials.bearer)
 
 	err = http.Serve(listener, mux)
 	if err != nil {
