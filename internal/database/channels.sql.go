@@ -89,6 +89,25 @@ func (q *Queries) FindChannel(ctx context.Context, id string) (Channel, error) {
 	return i, err
 }
 
+const findTag = `-- name: FindTag :one
+SELECT id, handle, title, created_at, frequency, videos_since_post FROM channels
+WHERE handle = ?
+`
+
+func (q *Queries) FindTag(ctx context.Context, handle string) (Channel, error) {
+	row := q.db.QueryRowContext(ctx, findTag, handle)
+	var i Channel
+	err := row.Scan(
+		&i.ID,
+		&i.Handle,
+		&i.Title,
+		&i.CreatedAt,
+		&i.Frequency,
+		&i.VideosSincePost,
+	)
+	return i, err
+}
+
 const getChannels = `-- name: GetChannels :many
 SELECT id, handle, title, created_at, frequency, videos_since_post FROM channels
 `

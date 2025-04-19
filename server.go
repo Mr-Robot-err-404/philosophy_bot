@@ -16,6 +16,13 @@ import (
 	"golang.ngrok.com/ngrok/config"
 )
 
+type Startup struct {
+	credentials Credentials
+	quotes      []database.Cornucopium
+	channels    []database.Channel
+	seen        map[string]bool
+}
+
 type Config struct {
 	jobs  chan Worker
 	comms Comms
@@ -26,6 +33,7 @@ type ServerState struct {
 	Quotes      []database.Cornucopium
 	LogHistory  []Log
 	QuotaPoints int
+	Seen        map[string]bool
 }
 
 type QuotePayload struct {
@@ -33,26 +41,58 @@ type QuotePayload struct {
 	Quote      string `json:"quote"`
 	Categories string `json:"categories,omitempty"`
 }
+type FreqPayload struct {
+	Tag  string `json:"tag"`
+	Freq int    `json:"freq"`
+}
 type Comms struct {
 	rd          chan ReadReq
 	writeWisdom chan WriteQuote
 	writeTkn    chan WriteAccessToken
+	writeSeen   chan string
 	logs        chan Log
 	points      chan UpdateQuotaPoints
 }
-
-// TODO: track quota
-//  -> Calculate quota margins before batch update
-//  -> Combine quota cron job with trending cron
+type DbComms struct {
+	saveVid     chan string
+	saveComment chan database.CreateCommentParams
+	saveUsage   chan Usage
+	saveQuota   chan int
+	resetQuota  chan bool
+}
+type Usage struct {
+	channelId string
+	quoteId   int64
+}
 
 // TODO:
-// channel frequency
-// never repeat a quote on a channel
+// log history response
+// stats endpoints:
+// -> most popular comments
+
+// HACK:
+// "no u" channel owner listener
+// user interactions
+
+// TEST: -> endpoints
+// update channel freq
+// delete channel
+// log history
+// get quota
 
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
 const MinWait = 2 * 60
 const MaxWait = 10 * 60
+
+func checkTkn(header http.Header, w http.ResponseWriter, bearer string) bool {
+	token, err := auth.GetBearerToken(header)
+	if err != nil || token != bearer {
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+		return false
+	}
+	return true
+}
 
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	printBreak()
@@ -87,14 +127,52 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 	server.SuccessResp(w, 200, "Accepted")
 }
 
+func (cfg *Config) handlerUpdateFrequency(w http.ResponseWriter, req *http.Request) {
+	comms := cfg.comms
+	state := readServerState(comms.rd)
+
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
+		return
+	}
+	defer req.Body.Close()
+	b, err := io.ReadAll(req.Body)
+
+	if err != nil {
+		server.ErrorResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var payload FreqPayload
+	err = json.Unmarshal(b, &payload)
+
+	if err != nil {
+		server.ErrorResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if len(payload.Tag) == 0 || payload.Freq < 1 {
+		server.ErrorResp(w, http.StatusBadRequest, "Tag required, freq must be > 0")
+		return
+	}
+	channel, err := queries.FindTag(ctx, payload.Tag)
+
+	if err != nil {
+		server.ErrorResp(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	params := database.UpdateChannelFreqParams{Frequency: int64(payload.Freq), ID: channel.ID}
+	_, err = queries.UpdateChannelFreq(ctx, params)
+
+	if err != nil {
+		server.ErrorResp(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	server.SuccessResp(w, http.StatusCreated, fmt.Sprintf("Updated frequency for %s", payload.Tag))
+}
+
 func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request) {
 	comms := cfg.comms
 	state := readServerState(comms.rd)
 
-	token, err := auth.GetBearerToken(req.Header)
-
-	if err != nil || token != state.Credentials.bearer {
-		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
 		return
 	}
 	tag := req.URL.Query().Get("tag")
@@ -138,22 +216,19 @@ func (cfg *Config) handlerDeleteChannel(w http.ResponseWriter, req *http.Request
 	comms := cfg.comms
 	state := readServerState(comms.rd)
 
-	token, err := auth.GetBearerToken(req.Header)
-
-	if err != nil || token != state.Credentials.bearer {
-		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
 		return
 	}
-	id := req.URL.Query().Get("id")
+	tag := req.URL.Query().Get("tag")
 
-	if len(id) == 0 {
+	if len(tag) == 0 {
 		server.ErrorResp(w, http.StatusBadRequest, "Channel ID required")
 		return
 	}
-	channel, err := queries.FindChannel(ctx, id)
+	channel, err := queries.FindTag(ctx, tag)
 
 	if err != nil || len(channel.ID) == 0 {
-		server.ErrorResp(w, http.StatusNotFound, "Channel ID not found")
+		server.ErrorResp(w, http.StatusNotFound, "Channel tag not found")
 		return
 	}
 	callback := "https://" + req.Host + "/diogenes/bowl"
@@ -176,10 +251,7 @@ func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) 
 	comms := cfg.comms
 	state := readServerState(comms.rd)
 
-	token, err := auth.GetBearerToken(req.Header)
-
-	if err != nil || token != state.Credentials.bearer {
-		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
 		return
 	}
 	defer req.Body.Close()
@@ -222,10 +294,7 @@ func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
 	comms := cfg.comms
 	state := readServerState(comms.rd)
 
-	token, err := auth.GetBearerToken(req.Header)
-
-	if err != nil || token != state.Credentials.bearer {
-		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
 		return
 	}
 	server.SuccessResp(w, http.StatusOK, recentLogs(state.LogHistory))
@@ -234,10 +303,8 @@ func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
 func (cfg *Config) QuotaPointsHandler(w http.ResponseWriter, req *http.Request) {
 	comms := cfg.comms
 	state := readServerState(comms.rd)
-	token, err := auth.GetBearerToken(req.Header)
 
-	if err != nil || token != state.Credentials.bearer {
-		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
 		return
 	}
 	server.SuccessResp(w, http.StatusOK, state.QuotaPoints)
@@ -247,20 +314,19 @@ func appHandler(prefix string, h http.Handler) http.Handler {
 	return http.StripPrefix(prefix, h)
 }
 
-func startServer(credentials Credentials, quotes []database.Cornucopium, channels []database.Channel) {
+func startServer(startup Startup) {
 	mux := http.NewServeMux()
+	credentials, quotes := startup.credentials, startup.quotes
+	channels, seen := startup.channels, startup.seen
 
 	cfg := Config{}
 	comms := Comms{}
-	serverState := ServerState{Credentials: credentials, Quotes: quotes, QuotaPoints: 10000}
+	dbComms := DbComms{}
+	serverState := ServerState{Credentials: credentials, Quotes: quotes, QuotaPoints: 10000, Seen: seen}
+
+	initComms(&comms, &dbComms)
 
 	results := make(chan TaskResult)
-	comms.rd = make(chan ReadReq)
-	comms.writeWisdom = make(chan WriteQuote)
-	comms.writeTkn = make(chan WriteAccessToken)
-	comms.logs = make(chan Log)
-	comms.points = make(chan UpdateQuotaPoints)
-
 	cfg.jobs = make(chan Worker)
 	cfg.comms = comms
 
@@ -269,6 +335,7 @@ func startServer(credentials Credentials, quotes []database.Cornucopium, channel
 
 	mux.HandleFunc("POST /philosophy/channels", cfg.handlerCreateChannel)
 	mux.HandleFunc("DELETE /philosophy/channels", cfg.handlerDeleteChannel)
+	mux.HandleFunc("UPDATE /philosophy/channels", cfg.handlerUpdateFrequency)
 	mux.HandleFunc("POST /philosophy/quotes", cfg.handlerCreateQuote)
 	mux.HandleFunc("GET /philosophy/logs", cfg.logHistoryHandler)
 	mux.HandleFunc("GET /philosophy/points", cfg.QuotaPointsHandler)
@@ -282,13 +349,15 @@ func startServer(credentials Credentials, quotes []database.Cornucopium, channel
 		log.Fatal(err)
 	}
 	log.Println("App URL", listener.URL())
-
 	callback := listener.URL() + "/diogenes/bowl"
 
-	go stateManager(serverState, comms)
-	go receiveJobs(cfg.jobs, results, cfg.comms.rd, cfg.comms.logs)
-	go receiveTaskResults(results, cfg.comms.logs)
-	go serverCronJob(cfg.comms.writeTkn, cfg.comms.logs)
+	go stateManager(serverState, &comms, &dbComms)
+	go dbManager(&dbComms, comms.logs)
+
+	go receiveJobs(cfg.jobs, results, &comms, &dbComms)
+	go receiveTaskResults(results, cfg.comms.logs, &dbComms)
+
+	go serverCronJob(&cfg.comms)
 	go renewSubscription(cfg.comms.logs, callback, credentials.bearer)
 
 	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
@@ -298,4 +367,19 @@ func startServer(credentials Credentials, quotes []database.Cornucopium, channel
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func initComms(comms *Comms, dbComms *DbComms) {
+	comms.rd = make(chan ReadReq)
+	comms.writeWisdom = make(chan WriteQuote)
+	comms.writeTkn = make(chan WriteAccessToken)
+	comms.logs = make(chan Log)
+	comms.points = make(chan UpdateQuotaPoints)
+	comms.writeSeen = make(chan string)
+
+	dbComms.saveVid = make(chan string)
+	dbComms.saveComment = make(chan database.CreateCommentParams)
+	dbComms.saveQuota = make(chan int)
+	dbComms.resetQuota = make(chan bool)
+	dbComms.saveUsage = make(chan Usage)
 }

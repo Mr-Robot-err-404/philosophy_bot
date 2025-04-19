@@ -18,6 +18,11 @@ type Channel struct {
 	VideosSincePost int64
 }
 
+type ChannelQuoteUsage struct {
+	ChannelID string
+	QuoteID   int64
+}
+
 type Comment struct {
 	ID        string
 	Likes     int64

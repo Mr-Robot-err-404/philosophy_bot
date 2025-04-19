@@ -25,6 +25,14 @@ func printLog(log Log) {
 	fmt.Println(log.Msg)
 }
 
+func seenMap(vids []string) map[string]bool {
+	seen := make(map[string]bool)
+	for _, id := range vids {
+		seen[id] = true
+	}
+	return seen
+}
+
 func recentLogs(slice []Log) []JsonLog {
 	reversed := slice
 	start := 0

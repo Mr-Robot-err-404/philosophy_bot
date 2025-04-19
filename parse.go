@@ -19,6 +19,8 @@ type TimeData struct {
 	Time   time.Time
 }
 
+const Threshold = 4*time.Hour + 20*time.Minute + 6*time.Second + 900*time.Millisecond
+
 func parseXML(data string) HookPayload {
 	var payload HookPayload
 	lines := strings.Split(data, "\n")
@@ -75,18 +77,19 @@ func validateXMLData(payload HookPayload) error {
 		return payload.Err
 	}
 	if len(payload.ChannelId) == 0 {
-		return fmt.Errorf("%s", "ChannelId not found")
+		return fmt.Errorf("ChannelId not found")
 	}
 	if len(payload.VideoId) == 0 {
-		return fmt.Errorf("%s", " not found")
+		return fmt.Errorf("VideoId not found")
 	}
 	if !payload.Published.Exists {
-		return fmt.Errorf("%s", "Published date does not exist in XML data")
+		return fmt.Errorf("Published date not found")
 	}
-	if payload.Updated.Exists {
-		published := payload.Published.Time
-		updated := payload.Updated.Time
-		return fmt.Errorf("Video already published. Published: %v, Updated: %v", published, updated)
+	published := payload.Published.Time
+	elapsed := time.Since(published)
+
+	if elapsed > Threshold {
+		return fmt.Errorf("Published long ago: %v, %v", published, elapsed)
 	}
 	return nil
 }

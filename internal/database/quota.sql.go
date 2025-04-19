@@ -28,12 +28,12 @@ func (q *Queries) GetQuota(ctx context.Context) (Quotum, error) {
 const refreshQuota = `-- name: RefreshQuota :one
 UPDATE quota 
 SET updated_at = datetime('now'), quota = 10000
-WHERE id = ?
+WHERE id = 'not_all_who_wander_are_lost'
 RETURNING id, quota, created_at, updated_at
 `
 
-func (q *Queries) RefreshQuota(ctx context.Context, id string) (Quotum, error) {
-	row := q.db.QueryRowContext(ctx, refreshQuota, id)
+func (q *Queries) RefreshQuota(ctx context.Context) (Quotum, error) {
+	row := q.db.QueryRowContext(ctx, refreshQuota)
 	var i Quotum
 	err := row.Scan(
 		&i.ID,
@@ -70,17 +70,12 @@ func (q *Queries) SetupQuota(ctx context.Context, id string) (Quotum, error) {
 const updateQuota = `-- name: UpdateQuota :one
 UPDATE quota 
 SET updated_at = datetime('now'), quota = ?
-WHERE id = ?
+WHERE id = 'not_all_who_wander_are_lost'
 RETURNING id, quota, created_at, updated_at
 `
 
-type UpdateQuotaParams struct {
-	Quota int64
-	ID    string
-}
-
-func (q *Queries) UpdateQuota(ctx context.Context, arg UpdateQuotaParams) (Quotum, error) {
-	row := q.db.QueryRowContext(ctx, updateQuota, arg.Quota, arg.ID)
+func (q *Queries) UpdateQuota(ctx context.Context, quota int64) (Quotum, error) {
+	row := q.db.QueryRowContext(ctx, updateQuota, quota)
 	var i Quotum
 	err := row.Scan(
 		&i.ID,

@@ -50,5 +50,13 @@ func exploreCommentThreads(key string, videos []string) ([]RankedItem, time.Dura
 	sort.Slice(best_comments, func(i, j int) bool {
 		return best_comments[i].Score > best_comments[j].Score
 	})
-	return best_comments, time.Since(ts)
+	return filterCutoff(best_comments), time.Since(ts)
+}
+
+func filterCutoff(comments []RankedItem) []RankedItem {
+	cutoff := 42
+	if len(comments) == 0 || len(comments) <= cutoff {
+		return comments
+	}
+	return comments[0:cutoff]
 }

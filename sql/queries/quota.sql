@@ -14,12 +14,12 @@ RETURNING *;
 -- name: RefreshQuota :one
 UPDATE quota 
 SET updated_at = datetime('now'), quota = 10000
-WHERE id = ?
+WHERE id = 'not_all_who_wander_are_lost'
 RETURNING *;
 
 -- name: UpdateQuota :one
 UPDATE quota 
 SET updated_at = datetime('now'), quota = ?
-WHERE id = ?
+WHERE id = 'not_all_who_wander_are_lost'
 RETURNING *;
 

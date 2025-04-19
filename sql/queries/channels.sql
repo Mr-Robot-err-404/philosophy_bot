@@ -22,6 +22,10 @@ RETURNING *;
 SELECT * FROM channels
 WHERE id = ?;
 
+-- name: FindTag :one
+SELECT * FROM channels
+WHERE handle = ?;
+
 -- name: UpdateChannelFreq :one
 UPDATE channels
 SET frequency = ?
