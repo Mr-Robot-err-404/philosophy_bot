@@ -95,7 +95,7 @@ func checkAccessToken(access_token *string) error {
 }
 
 func refresh_quota(id string) (time.Time, error) {
-	quota, err := queries.RefreshQuota(ctx, id)
+	quota, err := queries.RefreshQuota(ctx)
 	if err != nil {
 		return time.Time{}, err
 	}

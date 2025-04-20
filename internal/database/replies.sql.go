@@ -67,7 +67,7 @@ func (q *Queries) LinkVideo(ctx context.Context, arg LinkVideoParams) (Reply, er
 	return i, err
 }
 
-const storeReply = `-- name: StoreReply :many
+const storeReply = `-- name: StoreReply :one
 INSERT INTO replies(id, likes, quote_id, video_id, created_at)
 VALUES (
 	?,
@@ -86,38 +86,22 @@ type StoreReplyParams struct {
 	VideoID string
 }
 
-func (q *Queries) StoreReply(ctx context.Context, arg StoreReplyParams) ([]Reply, error) {
-	rows, err := q.db.QueryContext(ctx, storeReply,
+func (q *Queries) StoreReply(ctx context.Context, arg StoreReplyParams) (Reply, error) {
+	row := q.db.QueryRowContext(ctx, storeReply,
 		arg.ID,
 		arg.Likes,
 		arg.QuoteID,
 		arg.VideoID,
 	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Reply
-	for rows.Next() {
-		var i Reply
-		if err := rows.Scan(
-			&i.ID,
-			&i.Likes,
-			&i.QuoteID,
-			&i.CreatedAt,
-			&i.VideoID,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+	var i Reply
+	err := row.Scan(
+		&i.ID,
+		&i.Likes,
+		&i.QuoteID,
+		&i.CreatedAt,
+		&i.VideoID,
+	)
+	return i, err
 }
 
 const updateLikes = `-- name: UpdateLikes :one

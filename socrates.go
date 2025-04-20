@@ -27,7 +27,7 @@ func exploreTrending(cache TableCache, credentials Credentials) {
 	wisdom, dur := dropWisdom(payload, credentials)
 	printSummary(Summary{dur: dur, title: "Dropped wisdom", end: true})
 
-	saveProgress(wisdom)
+	storeProgress(wisdom)
 }
 
 func enlightenTrendingPage(comms *Comms, state ServerState) []WiseReply {
@@ -48,7 +48,7 @@ func enlightenTrendingPage(comms *Comms, state ServerState) []WiseReply {
 	wisdom, dur := dropWisdom(payload, state.Credentials)
 	cost += COMMENT_COST * len(comments)
 
-	summary = makeSummary(Summary{dur: dur, title: fmt.Sprintf("Dropped %d pieces of wisdom")})
+	summary = makeSummary(Summary{dur: dur, title: fmt.Sprintf("Dropped %d pieces of wisdom", len(wisdom))})
 	comms.logs <- Log{Msg: summary}
 	comms.points <- UpdateQuotaPoints{value: state.QuotaPoints - cost}
 

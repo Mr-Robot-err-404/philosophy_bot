@@ -24,8 +24,9 @@ type Startup struct {
 }
 
 type Config struct {
-	jobs  chan Worker
-	comms Comms
+	jobs    chan Worker
+	comms   Comms
+	dbComms DbComms
 }
 
 type ServerState struct {
@@ -54,19 +55,58 @@ type Comms struct {
 	points      chan UpdateQuotaPoints
 }
 type DbComms struct {
-	saveVid     chan string
-	saveComment chan database.CreateCommentParams
-	saveUsage   chan Usage
-	saveQuota   chan int
-	resetQuota  chan bool
+	deleteChannel chan SimpleMan
+	saveVid       chan SimpleMan
+	saveReply     chan SaveReply
+	saveComment   chan database.CreateCommentParams
+	saveUsage     chan Usage
+	saveQuota     chan int
+	createChannel chan CreateChannel
+	wisdom        chan Wisdom
+	resetQuota    chan bool
+	updateFreq    chan Freq
+	rd            DbReadComms
 }
+type CreateChannel struct {
+	params database.CreateChannelParams
+	resp   chan CreateResp
+}
+type SimpleMan struct {
+	id   string
+	resp chan error
+}
+type SaveReply struct {
+	params database.StoreReplyParams
+	resp   chan ReplyResp
+}
+type ReplyResp struct {
+	reply database.Reply
+	err   error
+}
+type CreateResp struct {
+	err     error
+	channel database.Channel
+}
+type Wisdom struct {
+	epiphany database.CreateQuoteParams
+	resp     chan WisdomResp
+}
+type WisdomResp struct {
+	err   error
+	quote database.Cornucopium
+}
+
+type Freq struct {
+	params database.UpdateChannelFreqParams
+	resp   chan error
+}
+
 type Usage struct {
 	channelId string
 	quoteId   int64
 }
 
 // TODO:
-// log history response
 // stats endpoints:
 // -> most popular comments
 
@@ -115,7 +155,7 @@ func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer req.Body.Close()
-	evaluateXMLData(string(body), cfg.jobs, cfg.comms.logs, state.QuotaPoints, cfg.comms.points)
+	evaluateXMLData(string(body), state.QuotaPoints, cfg)
 
 	rndId := uuid.New().String()
 	fileName := rndId + ".xml"
@@ -152,14 +192,14 @@ func (cfg *Config) handlerUpdateFrequency(w http.ResponseWriter, req *http.Reque
 		server.ErrorResp(w, http.StatusBadRequest, "Tag required, freq must be > 0")
 		return
 	}
-	channel, err := queries.FindTag(ctx, payload.Tag)
+	resp := readChannelByTag(payload.Tag, cfg.dbComms.rd.findTag)
 
-	if err != nil {
-		server.ErrorResp(w, http.StatusBadRequest, err.Error())
+	if resp.err != nil {
+		server.ErrorResp(w, http.StatusBadRequest, resp.err.Error())
 		return
 	}
-	params := database.UpdateChannelFreqParams{Frequency: int64(payload.Freq), ID: channel.ID}
-	_, err = queries.UpdateChannelFreq(ctx, params)
+	params := database.UpdateChannelFreqParams{Frequency: int64(payload.Freq), ID: resp.channel.ID}
+	err = updateChannelFreq(params, cfg.dbComms.updateFreq)
 
 	if err != nil {
 		server.ErrorResp(w, http.StatusInternalServerError, err.Error())
@@ -201,13 +241,13 @@ func (cfg *Config) handlerCreateChannel(w http.ResponseWriter, req *http.Request
 		Frequency:       1,
 		VideosSincePost: 0,
 	}
-	created, err := queries.CreateChannel(ctx, params)
+	created := createChannel(params, cfg.dbComms.createChannel)
 
-	if err != nil {
+	if created.err != nil {
 		server.ErrorResp(w, http.StatusInternalServerError, "Failed to create channel")
 		return
 	}
-	comms.logs <- Log{Msg: fmt.Sprintf("Created channel: %s", created.Handle)}
+	comms.logs <- Log{Msg: fmt.Sprintf("Created channel: %s", created.channel.Handle)}
 
 	server.SuccessResp(w, http.StatusCreated, "Created channel")
 }
@@ -225,20 +265,21 @@ func (cfg *Config) handlerDeleteChannel(w http.ResponseWriter, req *http.Request
 		server.ErrorResp(w, http.StatusBadRequest, "Channel ID required")
 		return
 	}
-	channel, err := queries.FindTag(ctx, tag)
+	resp := readChannelByTag(tag, cfg.dbComms.rd.findTag)
 
-	if err != nil || len(channel.ID) == 0 {
+	if resp.err != nil || len(resp.channel.ID) == 0 {
 		server.ErrorResp(w, http.StatusNotFound, "Channel tag not found")
 		return
 	}
+	channel := resp.channel
 	callback := "https://" + req.Host + "/diogenes/bowl"
-	err = server.PostPubSub(channel.ID, Unsubscribe, callback, state.Credentials.bearer)
+	err := server.PostPubSub(channel.ID, Unsubscribe, callback, state.Credentials.bearer)
 
 	if err != nil {
 		server.ErrorResp(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_, err = queries.DeleteChannel(ctx, channel.ID)
+	err = simpleMan(channel.ID, cfg.dbComms.deleteChannel)
 
 	if err != nil {
 		server.ErrorResp(w, http.StatusInternalServerError, err.Error())
@@ -275,18 +316,17 @@ func (cfg *Config) handlerCreateQuote(w http.ResponseWriter, req *http.Request) 
 		categories = payload.Categories
 	}
 	params := database.CreateQuoteParams{ID: id, Quote: payload.Quote, Author: payload.Author, Categories: categories}
-	quote, err := queries.CreateQuote(ctx, params)
+	resp := suddenEpiphany(params, cfg.dbComms.wisdom)
 
-	if err != nil {
+	if resp.err != nil {
 		server.ErrorResp(w, http.StatusInternalServerError, "Failed to save quote")
 		return
 	}
-	wr := WriteQuote{quote: quote, resp: make(chan bool)}
+	wr := WriteQuote{quote: resp.quote, resp: make(chan bool)}
 	comms.writeWisdom <- wr
 	<-wr.resp
 
 	comms.logs <- Log{Msg: "New quote added"}
-
 	server.SuccessResp(w, http.StatusCreated, "Created Quote")
 }
 
@@ -329,6 +369,7 @@ func startServer(startup Startup) {
 	results := make(chan TaskResult)
 	cfg.jobs = make(chan Worker)
 	cfg.comms = comms
+	cfg.dbComms = dbComms
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
 	mux.Handle("/app/", fileHnd)
@@ -351,13 +392,13 @@ func startServer(startup Startup) {
 	log.Println("App URL", listener.URL())
 	callback := listener.URL() + "/diogenes/bowl"
 
-	go stateManager(serverState, &comms, &dbComms)
-	go dbManager(&dbComms, comms.logs)
+	go stateManager(serverState, &cfg.comms, &dbComms)
+	go dbManager(&dbComms, cfg.comms.logs)
 
-	go receiveJobs(cfg.jobs, results, &comms, &dbComms)
+	go receiveJobs(cfg.jobs, results, &cfg.comms, &dbComms)
 	go receiveTaskResults(results, cfg.comms.logs, &dbComms)
 
-	go serverCronJob(&cfg.comms)
+	go serverCronJob(&cfg.comms, &cfg.dbComms)
 	go renewSubscription(cfg.comms.logs, callback, credentials.bearer)
 
 	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
@@ -373,13 +414,26 @@ func initComms(comms *Comms, dbComms *DbComms) {
 	comms.rd = make(chan ReadReq)
 	comms.writeWisdom = make(chan WriteQuote)
 	comms.writeTkn = make(chan WriteAccessToken)
+	comms.writeSeen = make(chan string)
 	comms.logs = make(chan Log)
 	comms.points = make(chan UpdateQuotaPoints)
-	comms.writeSeen = make(chan string)
 
-	dbComms.saveVid = make(chan string)
+	rdComms := DbReadComms{}
+	rdComms.findTag = make(chan FindTag)
+	rdComms.get = make(chan GetChannel)
+	dbComms.rd = rdComms
+
 	dbComms.saveComment = make(chan database.CreateCommentParams)
 	dbComms.saveQuota = make(chan int)
-	dbComms.resetQuota = make(chan bool)
 	dbComms.saveUsage = make(chan Usage)
+
+	dbComms.createChannel = make(chan CreateChannel)
+	dbComms.deleteChannel = make(chan SimpleMan)
+
+	dbComms.saveVid = make(chan SimpleMan, 50)
+	dbComms.saveReply = make(chan SaveReply, 50)
+
+	dbComms.wisdom = make(chan Wisdom)
+	dbComms.updateFreq = make(chan Freq)
+	dbComms.resetQuota = make(chan bool)
 }

@@ -1,7 +1,7 @@
 -- name: GetReplies :many
 SELECT * FROM replies;
 
--- name: StoreReply :many
+-- name: StoreReply :one
 INSERT INTO replies(id, likes, quote_id, video_id, created_at)
 VALUES (
 	?,

@@ -5,7 +5,38 @@ import (
 	"fmt"
 )
 
-func saveProgress(replies []WiseReply) {
+func saveProgress(replies []WiseReply, dbComms *DbComms, logs chan<- Log) {
+	if len(replies) == 0 {
+		return
+	}
+	vids := unique_vids(replies)
+	msg := "Saved vids: "
+
+	for _, id := range vids {
+		err := simpleMan(id, dbComms.saveVid)
+		if err != nil {
+			logs <- Log{Err: err}
+			continue
+		}
+		msg += fmt.Sprintf("%s | ", id)
+	}
+	logs <- Log{Msg: msg}
+	msg = "Saved replies: "
+
+	for _, item := range replies {
+		params := database.StoreReplyParams{ID: item.Reply.Id, Likes: 0, QuoteID: item.Quote_id, VideoID: item.Video_id}
+		resp := saveReply(params, dbComms.saveReply)
+
+		if resp.err != nil {
+			logs <- Log{Err: resp.err}
+			continue
+		}
+		msg += resp.reply.ID
+	}
+	logs <- Log{Msg: msg}
+}
+
+func storeProgress(replies []WiseReply) {
 	if len(replies) == 0 {
 		return
 	}

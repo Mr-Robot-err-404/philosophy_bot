@@ -10,11 +10,61 @@ func readServerState(rd chan ReadReq) ServerState {
 	ch := make(chan ServerState)
 	defer close(ch)
 
-	req := ReadReq{resp: ch}
-	rd <- req
-
+	rd <- ReadReq{resp: ch}
 	state := <-ch
 	return state
+}
+
+func readChannelByTag(tag string, find chan<- FindTag) rdChannelResp {
+	ch := make(chan rdChannelResp)
+	defer close(ch)
+
+	find <- FindTag{resp: ch, value: tag}
+	return <-ch
+}
+func updateChannelFreq(params database.UpdateChannelFreqParams, update chan<- Freq) error {
+	ch := make(chan error)
+	defer close(ch)
+
+	update <- Freq{resp: ch, params: params}
+	return <-ch
+}
+
+func createChannel(params database.CreateChannelParams, create chan<- CreateChannel) CreateResp {
+	ch := make(chan CreateResp)
+	defer close(ch)
+
+	create <- CreateChannel{params: params, resp: ch}
+	return <-ch
+}
+func saveReply(params database.StoreReplyParams, reply chan SaveReply) ReplyResp {
+	ch := make(chan ReplyResp)
+	defer close(ch)
+
+	reply <- SaveReply{params: params, resp: ch}
+	return <-ch
+}
+
+func simpleMan(id string, simple chan<- SimpleMan) error {
+	ch := make(chan error)
+	defer close(ch)
+
+	simple <- SimpleMan{id: id, resp: ch}
+	return <-ch
+}
+func suddenEpiphany(epiphany database.CreateQuoteParams, wisdom chan<- Wisdom) WisdomResp {
+	ch := make(chan WisdomResp)
+	defer close(ch)
+
+	wisdom <- Wisdom{epiphany: epiphany, resp: ch}
+	return <-ch
+}
+func findChannel(id string, get chan<- GetChannel) GetResp {
+	ch := make(chan GetResp)
+	defer close(ch)
+
+	get <- GetChannel{id: id, resp: ch}
+	return <-ch
 }
 
 func unsubscribeChannels(callback string, bearer string) error {
