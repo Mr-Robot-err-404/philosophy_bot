@@ -2,15 +2,13 @@ package main
 
 import (
 	"bot/philosophy/internal/database"
-	"fmt"
 )
 
-func cleanup(v *int64, channel_id string) {
+func cleanup(v *int64, channel_id string, logs chan<- Log, seen chan<- SeenVid) {
 	params := database.UpdateVideosSincePostParams{VideosSincePost: *v, ID: channel_id}
-	_, err := queries.UpdateVideosSincePost(ctx, params)
-
+	err := updateSeen(params, seen)
 	if err != nil {
-		fmt.Println(err)
+		logs <- Log{Err: err}
 		return
 	}
 }

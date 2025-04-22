@@ -61,11 +61,16 @@ type DbComms struct {
 	saveComment   chan database.CreateCommentParams
 	saveUsage     chan Usage
 	saveQuota     chan int
+	seenVid       chan SeenVid
 	createChannel chan CreateChannel
 	wisdom        chan Wisdom
 	resetQuota    chan bool
 	updateFreq    chan Freq
 	rd            DbReadComms
+}
+type SeenVid struct {
+	params database.UpdateVideosSincePostParams
+	resp   chan error
 }
 type CreateChannel struct {
 	params database.CreateChannelParams
@@ -335,6 +340,7 @@ func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
 	state := readServerState(comms.rd)
 
 	if !checkTkn(req.Header, w, state.Credentials.bearer) {
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorizaed")
 		return
 	}
 	server.SuccessResp(w, http.StatusOK, recentLogs(state.LogHistory))
@@ -399,7 +405,7 @@ func startServer(startup Startup) {
 	go receiveTaskResults(results, cfg.comms.logs, &dbComms)
 
 	go serverCronJob(&cfg.comms, &cfg.dbComms)
-	go renewSubscription(cfg.comms.logs, callback, credentials.bearer)
+	go renewSubscription(cfg.comms.logs, callback, credentials.bearer, &cfg.dbComms)
 
 	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
 	defer unsubscribeChannels(callback, credentials.bearer)
@@ -421,6 +427,8 @@ func initComms(comms *Comms, dbComms *DbComms) {
 	rdComms := DbReadComms{}
 	rdComms.findTag = make(chan FindTag)
 	rdComms.get = make(chan GetChannel)
+	rdComms.getAll = make(chan GetAll)
+	rdComms.unused = make(chan GetUnused)
 	dbComms.rd = rdComms
 
 	dbComms.saveComment = make(chan database.CreateCommentParams)
@@ -432,6 +440,7 @@ func initComms(comms *Comms, dbComms *DbComms) {
 
 	dbComms.saveVid = make(chan SimpleMan, 50)
 	dbComms.saveReply = make(chan SaveReply, 50)
+	dbComms.seenVid = make(chan SeenVid)
 
 	dbComms.wisdom = make(chan Wisdom)
 	dbComms.updateFreq = make(chan Freq)

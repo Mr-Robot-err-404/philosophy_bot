@@ -17,7 +17,7 @@ VALUES (
 	?,
 	datetime('now')
 )
-RETURNING id, likes, quote_id, created_at, channel_id
+RETURNING id, likes, quote_id, created_at
 `
 
 type CreateCommentParams struct {
@@ -33,13 +33,12 @@ func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (C
 		&i.Likes,
 		&i.QuoteID,
 		&i.CreatedAt,
-		&i.ChannelID,
 	)
 	return i, err
 }
 
 const getComments = `-- name: GetComments :many
-SELECT id, likes, quote_id, created_at, channel_id FROM comments
+SELECT id, likes, quote_id, created_at FROM comments
 `
 
 func (q *Queries) GetComments(ctx context.Context) ([]Comment, error) {
@@ -56,7 +55,6 @@ func (q *Queries) GetComments(ctx context.Context) ([]Comment, error) {
 			&i.Likes,
 			&i.QuoteID,
 			&i.CreatedAt,
-			&i.ChannelID,
 		); err != nil {
 			return nil, err
 		}

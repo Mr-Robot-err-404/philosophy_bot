@@ -28,7 +28,6 @@ type Comment struct {
 	Likes     int64
 	QuoteID   int64
 	CreatedAt sql.NullTime
-	ChannelID string
 }
 
 type Cornucopium struct {

@@ -16,11 +16,28 @@ type FindTag struct {
 type DbReadComms struct {
 	findTag chan FindTag
 	get     chan GetChannel
+	getAll  chan GetAll
+	unused  chan GetUnused
+}
+type GetUnused struct {
+	id   string
+	resp chan UnusedResp
+}
+type UnusedResp struct {
+	quotes []database.Cornucopium
+	err    error
+}
+type GetAll struct{ resp chan GetAllResp }
+
+type GetAllResp struct {
+	channels []database.Channel
+	err      error
 }
 type GetChannel struct {
 	id   string
 	resp chan GetResp
 }
+
 type GetResp struct {
 	err     error
 	channel database.Channel
@@ -73,7 +90,7 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 				logs <- Log{Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Posted comment: %v", saved)}
+			logs <- Log{Msg: fmt.Sprintf("Posted comment: %s", saved.ID)}
 
 		case wisdom := <-comms.wisdom:
 			quote, err := queries.CreateQuote(ctx, wisdom.epiphany)
@@ -82,6 +99,18 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 		case get := <-comms.rd.get:
 			channel, err := queries.FindChannel(ctx, get.id)
 			get.resp <- GetResp{channel: channel, err: err}
+
+		case getAll := <-comms.rd.getAll:
+			channels, err := queries.GetChannels(ctx)
+			getAll.resp <- GetAllResp{channels: channels, err: err}
+
+		case unused := <-comms.rd.unused:
+			quotes, err := queries.SelectUnusedQuotes(ctx, unused.id)
+			unused.resp <- UnusedResp{quotes: quotes, err: err}
+
+		case seen := <-comms.seenVid:
+			_, err := queries.UpdateVideosSincePost(ctx, seen.params)
+			seen.resp <- err
 
 		case create := <-comms.createChannel:
 			channel, err := queries.CreateChannel(ctx, create.params)
@@ -111,15 +140,15 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 				logs <- Log{Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Updated Quota: %v", n)}
+			logs <- Log{Msg: fmt.Sprintf("Updated Quota -> %d", n.Quota)}
 
 		case <-comms.resetQuota:
-			n, err := queries.RefreshQuota(ctx)
+			_, err := queries.RefreshQuota(ctx)
 			if err != nil {
 				logs <- Log{Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Reset Quota: %v", n)}
+			logs <- Log{Msg: "Reset quota"}
 
 		case freq := <-comms.updateFreq:
 			_, err := queries.UpdateChannelFreq(ctx, freq.params)

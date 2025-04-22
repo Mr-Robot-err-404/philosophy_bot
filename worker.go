@@ -52,7 +52,7 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 	elapsed := time.Since(payload.Published.Time)
 
 	if elapsed > Threshold {
-		comms.logs <- Log{Msg: fmt.Sprintf("Published long ago: %v | %v | %v", published, elapsed)}
+		comms.logs <- Log{Msg: fmt.Sprintf("Published long ago: %v | %v | %v", payload.VideoId, published, elapsed)}
 		return
 	}
 	printBreak()
@@ -72,22 +72,20 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 	}
 	channel := resp.channel
 	c := channel.VideosSincePost + 1
-	defer cleanup(&c, channel.ID)
+	defer cleanup(&c, channel.ID, comms.logs, cfg.dbComms.seenVid)
 
 	if c < channel.Frequency {
 		comms.logs <- Log{Msg: fmt.Sprintf("Skipped for low frequency: %s", channel.Handle)}
 		return
 	}
 	c = 0
-
 	scheduleJob(payload, cfg.jobs)
-	comms.points <- UpdateQuotaPoints{value: points - 50}
 }
 
 func serverCronJob(comms *Comms, dbComms *DbComms) {
 	refresh := time.NewTicker(50 * time.Minute)
 	quota := time.NewTicker(25 * time.Hour)
-	trending := time.NewTicker(30 * time.Hour)
+	trending := time.NewTicker(30 * time.Minute)
 
 	for {
 		select {
@@ -103,7 +101,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 			}
 			update := WriteAccessToken{access_token: access_token, resp: make(chan bool)}
 			comms.writeTkn <- update
-			comms.logs <- Log{Msg: fmt.Sprintf("%s", "Updated refresh token")}
+			comms.logs <- Log{Msg: "Updated refresh token"}
 
 		case <-trending.C:
 			state := readServerState(comms.rd)
@@ -118,17 +116,17 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 	}
 }
 
-func renewSubscription(logs chan<- Log, callback string, bearer string) {
+func renewSubscription(logs chan<- Log, callback string, bearer string, dbComms *DbComms) {
 	ticker := time.NewTicker(4 * 24 * time.Hour)
 	for {
 		<-ticker.C
-		channels, err := queries.GetChannels(ctx)
+		resp := getAllChannels(dbComms.rd.getAll)
 
-		if err != nil {
-			logs <- Log{Err: err}
+		if resp.err != nil {
+			logs <- Log{Err: resp.err}
 			continue
 		}
-		subscribeToChannels(channels, callback, bearer, logs)
+		subscribeToChannels(resp.channels, callback, bearer, logs)
 	}
 }
 
@@ -150,13 +148,19 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms
 			continue
 		}
 		comms.writeSeen <- videoId
-		quotes, err := queries.SelectUnusedQuotes(ctx, channelId)
 
+		err := simpleMan(videoId, dbComms.saveVid)
 		if err != nil {
-			comms.logs <- Log{Err: fmt.Errorf("Task err: %s", curr.Err.Error())}
+			comms.logs <- Log{Err: err}
 			continue
 		}
-		stack := shuffleStack(quotes)
+		resp := getUnusedQuotes(channelId, dbComms.rd.unused)
+
+		if resp.err != nil {
+			comms.logs <- Log{Err: fmt.Errorf("Task err: %s", resp.err.Error())}
+			continue
+		}
+		stack := shuffleStack(resp.quotes)
 		q := stack[0]
 
 		payload := CommentPayload{}
@@ -170,7 +174,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms
 
 		dbComms.saveUsage <- Usage{channelId: channelId, quoteId: q.ID}
 
-		go executeTask(ch, info, state.Credentials, task.Delay)
+		go executeTask(ch, info, state.Credentials, task.Delay, comms.logs)
 	}
 }
 
@@ -185,13 +189,14 @@ func receiveTaskResults(ch <-chan TaskResult, logs chan<- Log, dbComms *DbComms)
 	}
 }
 
-func executeTask(ch chan<- TaskResult, info CommentInfo, credentials Credentials, delay time.Duration) {
+func executeTask(ch chan<- TaskResult, info CommentInfo, credentials Credentials, delay time.Duration, logs chan<- Log) {
+	logs <- Log{Msg: fmt.Sprintf("Sleep for %v", delay)}
 	time.Sleep(delay)
+	logs <- Log{Msg: fmt.Sprintf("Posting comment... | video_id: %s", info.VideoId)}
 	postComment(info, credentials, ch)
 }
 
 func scheduleJob(payload HookPayload, jobs chan<- Worker) error {
-	fmt.Println("job scheduled")
 	ts := helper.RndInt(MinWait, MaxWait)
 	delay := time.Duration(ts) * time.Second
 	jobs <- Worker{Payload: payload, Delay: delay}

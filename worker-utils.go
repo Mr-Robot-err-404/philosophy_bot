@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-func readServerState(rd chan ReadReq) ServerState {
+func readServerState(rd chan<- ReadReq) ServerState {
 	ch := make(chan ServerState)
 	defer close(ch)
 
@@ -37,11 +37,25 @@ func createChannel(params database.CreateChannelParams, create chan<- CreateChan
 	create <- CreateChannel{params: params, resp: ch}
 	return <-ch
 }
-func saveReply(params database.StoreReplyParams, reply chan SaveReply) ReplyResp {
+func saveReply(params database.StoreReplyParams, reply chan<- SaveReply) ReplyResp {
 	ch := make(chan ReplyResp)
 	defer close(ch)
 
 	reply <- SaveReply{params: params, resp: ch}
+	return <-ch
+}
+func getAllChannels(getAll chan<- GetAll) GetAllResp {
+	ch := make(chan GetAllResp)
+	defer close(ch)
+
+	getAll <- GetAll{resp: ch}
+	return <-ch
+}
+func getUnusedQuotes(channelId string, unused chan<- GetUnused) UnusedResp {
+	ch := make(chan UnusedResp)
+	defer close(ch)
+
+	unused <- GetUnused{id: channelId, resp: ch}
 	return <-ch
 }
 
@@ -64,6 +78,13 @@ func findChannel(id string, get chan<- GetChannel) GetResp {
 	defer close(ch)
 
 	get <- GetChannel{id: id, resp: ch}
+	return <-ch
+}
+func updateSeen(params database.UpdateVideosSincePostParams, seen chan<- SeenVid) error {
+	ch := make(chan error)
+	defer close(ch)
+
+	seen <- SeenVid{params: params, resp: ch}
 	return <-ch
 }
 

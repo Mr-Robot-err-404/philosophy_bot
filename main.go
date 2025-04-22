@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"flag"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 )
 
@@ -22,6 +25,23 @@ func main() {
 	cmd.Parse(os.Args[1:])
 
 	if *dev_mode {
+		file, err := os.ReadFile("./tmp/test_input/add56bb5-ecfa-4c65-9329-a1a1ee0bed56.xml")
+		if err != nil {
+			log.Fatal(err)
+		}
+		url := "https://f026-81-111-159-136.ngrok-free.app/diogenes/bowl"
+		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(file))
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		client := &http.Client{}
+		resp, err := client.Do(req)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(resp.Status)
 		return
 	}
 	sisyphus()
