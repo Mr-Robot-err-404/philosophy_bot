@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createComment = `-- name: CreateComment :one
@@ -55,6 +56,51 @@ func (q *Queries) GetComments(ctx context.Context) ([]Comment, error) {
 			&i.Likes,
 			&i.QuoteID,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPopularComments = `-- name: GetPopularComments :many
+SELECT comments.id, comments.likes, comments.quote_id, comments.created_at, cornucopia.quote, cornucopia.author
+FROM comments JOIN cornucopia ON comments.quote_id = cornucopia.id
+ORDER BY comments.likes DESC
+`
+
+type GetPopularCommentsRow struct {
+	ID        string
+	Likes     int64
+	QuoteID   int64
+	CreatedAt sql.NullTime
+	Quote     string
+	Author    string
+}
+
+func (q *Queries) GetPopularComments(ctx context.Context) ([]GetPopularCommentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPopularComments)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPopularCommentsRow
+	for rows.Next() {
+		var i GetPopularCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Likes,
+			&i.QuoteID,
+			&i.CreatedAt,
+			&i.Quote,
+			&i.Author,
 		); err != nil {
 			return nil, err
 		}

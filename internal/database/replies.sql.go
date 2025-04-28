@@ -7,7 +7,55 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
+
+const getPopularReplies = `-- name: GetPopularReplies :many
+SELECT replies.id, replies.likes, replies.quote_id, replies.created_at, replies.video_id, cornucopia.quote, cornucopia.author
+FROM replies JOIN cornucopia ON replies.quote_id = cornucopia.id
+ORDER BY replies.likes DESC
+`
+
+type GetPopularRepliesRow struct {
+	ID        string
+	Likes     int64
+	QuoteID   int64
+	CreatedAt sql.NullTime
+	VideoID   string
+	Quote     string
+	Author    string
+}
+
+func (q *Queries) GetPopularReplies(ctx context.Context) ([]GetPopularRepliesRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPopularReplies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPopularRepliesRow
+	for rows.Next() {
+		var i GetPopularRepliesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Likes,
+			&i.QuoteID,
+			&i.CreatedAt,
+			&i.VideoID,
+			&i.Quote,
+			&i.Author,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const getReplies = `-- name: GetReplies :many
 SELECT id, likes, quote_id, created_at, video_id FROM replies

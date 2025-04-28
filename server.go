@@ -111,9 +111,7 @@ type Usage struct {
 	quoteId   int64
 }
 
-// TODO:
-// stats endpoints:
-// -> most popular comments
+// TODO: stats cron -> done?
 
 // HACK:
 // "no u" channel owner listener
@@ -124,6 +122,7 @@ type Usage struct {
 // delete channel
 // log history
 // get quota
+// stats
 
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
@@ -140,10 +139,6 @@ func checkTkn(header http.Header, w http.ResponseWriter, bearer string) bool {
 }
 
 func (cfg *Config) handlerDiogenes(w http.ResponseWriter, req *http.Request) {
-	printBreak()
-	fmt.Println("METHOD: ", req.Method)
-	fmt.Println("QUERY:  ", req.URL.Query())
-
 	comms := cfg.comms
 	state := readServerState(comms.rd)
 
@@ -386,6 +381,7 @@ func startServer(startup Startup) {
 	mux.HandleFunc("POST /philosophy/quotes", cfg.handlerCreateQuote)
 	mux.HandleFunc("GET /philosophy/logs", cfg.logHistoryHandler)
 	mux.HandleFunc("GET /philosophy/points", cfg.QuotaPointsHandler)
+	mux.HandleFunc("GET /philosophy/stats", cfg.handlerStats)
 	mux.HandleFunc("/diogenes/bowl", cfg.handlerDiogenes)
 
 	listener, err := ngrok.Listen(ctx,
@@ -429,6 +425,8 @@ func initComms(comms *Comms, dbComms *DbComms) {
 	rdComms.get = make(chan GetChannel)
 	rdComms.getAll = make(chan GetAll)
 	rdComms.unused = make(chan GetUnused)
+	rdComms.popularComments = make(chan PopularComments)
+	rdComms.popularReplies = make(chan PopularReplies)
 	dbComms.rd = rdComms
 
 	dbComms.saveComment = make(chan database.CreateCommentParams)

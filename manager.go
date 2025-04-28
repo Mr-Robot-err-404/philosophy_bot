@@ -14,10 +14,12 @@ type FindTag struct {
 	value string
 }
 type DbReadComms struct {
-	findTag chan FindTag
-	get     chan GetChannel
-	getAll  chan GetAll
-	unused  chan GetUnused
+	findTag         chan FindTag
+	get             chan GetChannel
+	getAll          chan GetAll
+	unused          chan GetUnused
+	popularComments chan PopularComments
+	popularReplies  chan PopularReplies
 }
 type GetUnused struct {
 	id   string
@@ -26,6 +28,18 @@ type GetUnused struct {
 type UnusedResp struct {
 	quotes []database.Cornucopium
 	err    error
+}
+
+type PopularComments = struct{ resp chan PopularCommentsResp }
+type PopularCommentsResp struct {
+	err      error
+	comments []database.GetPopularCommentsRow
+}
+
+type PopularReplies = struct{ resp chan PopularRepliesResp }
+type PopularRepliesResp struct {
+	err     error
+	replies []database.GetPopularRepliesRow
 }
 type GetAll struct{ resp chan GetAllResp }
 
@@ -107,6 +121,14 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 		case unused := <-comms.rd.unused:
 			quotes, err := queries.SelectUnusedQuotes(ctx, unused.id)
 			unused.resp <- UnusedResp{quotes: quotes, err: err}
+
+		case popular := <-comms.rd.popularComments:
+			comments, err := queries.GetPopularComments(ctx)
+			popular.resp <- PopularCommentsResp{comments: comments, err: err}
+
+		case rabbitHole := <-comms.rd.popularReplies:
+			replies, err := queries.GetPopularReplies(ctx)
+			rabbitHole.resp <- PopularRepliesResp{replies: replies, err: err}
 
 		case seen := <-comms.seenVid:
 			_, err := queries.UpdateVideosSincePost(ctx, seen.params)

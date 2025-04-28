@@ -87,6 +87,20 @@ func updateSeen(params database.UpdateVideosSincePostParams, seen chan<- SeenVid
 	seen <- SeenVid{params: params, resp: ch}
 	return <-ch
 }
+func getPopularComments(popular chan<- PopularComments) PopularCommentsResp {
+	ch := make(chan PopularCommentsResp)
+	defer close(ch)
+
+	popular <- PopularComments{resp: ch}
+	return <-ch
+}
+func getPopularReplies(popular chan<- PopularReplies) PopularRepliesResp {
+	ch := make(chan PopularRepliesResp)
+	defer close(ch)
+
+	popular <- PopularReplies{resp: ch}
+	return <-ch
+}
 
 func unsubscribeChannels(callback string, bearer string) error {
 	channels, err := queries.GetChannels(ctx)
