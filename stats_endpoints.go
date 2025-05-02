@@ -33,3 +33,24 @@ func (cfg *Config) handlerStats(w http.ResponseWriter, req *http.Request) {
 	payload := StatsPayload{Comments: resp.comments, Replies: response.replies}
 	server.SuccessResp(w, http.StatusOK, payload)
 }
+
+func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
+	comms := cfg.comms
+	state := readServerState(comms.rd)
+
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorizaed")
+		return
+	}
+	server.SuccessResp(w, http.StatusOK, recentLogs(state.LogHistory))
+}
+
+func (cfg *Config) QuotaPointsHandler(w http.ResponseWriter, req *http.Request) {
+	comms := cfg.comms
+	state := readServerState(comms.rd)
+
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
+		return
+	}
+	server.SuccessResp(w, http.StatusOK, state.QuotaPoints)
+}

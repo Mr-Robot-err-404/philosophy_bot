@@ -52,7 +52,7 @@ func main() {
 		log.Fatal(err)
 	}
 	if *start_server {
-		startup := Startup{credentials: credentials, quotes: cache.quotes, channels: cache.channels, seen: seenMap(cache.videos)}
+		startup := Startup{credentials: credentials, quotes: cache.quotes, channels: cache.channels, seen: seenMap(cache.videos), likes: makeLikeMap(cache.replies)}
 		startServer(startup)
 		return
 	}

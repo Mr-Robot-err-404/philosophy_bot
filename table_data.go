@@ -8,6 +8,7 @@ import (
 
 type TableCache struct {
 	quotes   []database.Cornucopium
+	comments []database.Comment
 	replies  []database.Reply
 	videos   []string
 	channels []database.Channel
@@ -35,6 +36,10 @@ func getTableCache(access_token *string) (TableCache, error) {
 		return TableCache{}, err
 	}
 	replies, err := queries.GetReplies(ctx)
+	if err != nil {
+		return TableCache{}, err
+	}
+	comments, err := queries.GetComments(ctx)
 	if err != nil {
 		return TableCache{}, err
 	}
@@ -66,6 +71,7 @@ func getTableCache(access_token *string) (TableCache, error) {
 		quota.UpdatedAt = updated
 	}
 	cache.channels = channels
+	cache.comments = comments
 	cache.replies = replies
 	cache.login = login
 	cache.quota = quota

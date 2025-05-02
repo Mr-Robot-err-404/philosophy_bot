@@ -83,9 +83,10 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 }
 
 func serverCronJob(comms *Comms, dbComms *DbComms) {
+	trending := time.NewTicker(30 * time.Minute)
 	refresh := time.NewTicker(50 * time.Minute)
 	quota := time.NewTicker(25 * time.Hour)
-	trending := time.NewTicker(30 * time.Minute)
+	stats := time.NewTicker(51 * time.Hour)
 
 	for {
 		select {
@@ -112,6 +113,8 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 			}
 			wisdom := enlightenTrendingPage(comms, state)
 			saveProgress(wisdom, dbComms, comms.logs)
+
+		case <-stats.C:
 		}
 	}
 }
