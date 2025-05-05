@@ -152,20 +152,20 @@ func (q *Queries) StoreReply(ctx context.Context, arg StoreReplyParams) (Reply, 
 	return i, err
 }
 
-const updateLikes = `-- name: UpdateLikes :one
+const updateReplyLikes = `-- name: UpdateReplyLikes :one
 UPDATE replies
 SET likes = ?
 WHERE id = ?
 RETURNING id, likes, quote_id, created_at, video_id
 `
 
-type UpdateLikesParams struct {
+type UpdateReplyLikesParams struct {
 	Likes int64
 	ID    string
 }
 
-func (q *Queries) UpdateLikes(ctx context.Context, arg UpdateLikesParams) (Reply, error) {
-	row := q.db.QueryRowContext(ctx, updateLikes, arg.Likes, arg.ID)
+func (q *Queries) UpdateReplyLikes(ctx context.Context, arg UpdateReplyLikesParams) (Reply, error) {
+	row := q.db.QueryRowContext(ctx, updateReplyLikes, arg.Likes, arg.ID)
 	var i Reply
 	err := row.Scan(
 		&i.ID,

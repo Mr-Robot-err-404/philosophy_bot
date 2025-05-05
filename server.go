@@ -22,6 +22,7 @@ type Startup struct {
 	channels    []database.Channel
 	seen        map[string]bool
 	likes       map[string]int
+	cache       TableCache
 }
 
 type Config struct {
@@ -112,7 +113,7 @@ type Usage struct {
 	quoteId   int64
 }
 
-// TODO: stats cron -> done?
+// TODO: stats cron guardrail - filter old replies & comments
 
 // HACK:
 // "no u" channel owner listener
@@ -286,6 +287,8 @@ func initComms(comms *Comms, dbComms *DbComms) {
 	rdComms.unused = make(chan GetUnused)
 	rdComms.popularComments = make(chan PopularComments)
 	rdComms.popularReplies = make(chan PopularReplies)
+	rdComms.replies = make(chan GetReplies)
+	rdComms.comments = make(chan GetComments)
 	dbComms.rd = rdComms
 
 	dbComms.saveComment = make(chan database.CreateCommentParams)

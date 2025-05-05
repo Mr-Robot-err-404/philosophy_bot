@@ -56,12 +56,12 @@ func enlightenTrendingPage(comms *Comms, state ServerState) []WiseReply {
 }
 
 func makeSummary(summary Summary) string {
-	return fmt.Sprintf("%s in: %v\n", summary.title, summary.dur)
+	return fmt.Sprintf("%s in: %v", summary.title, summary.dur)
 }
 
 func printSummary(summary Summary) {
 	printBreak()
-	fmt.Printf("%s in: %v\n", summary.title, summary.dur)
+	fmt.Printf("%s in: %v", summary.title, summary.dur)
 	if summary.end {
 		printBreak()
 	}

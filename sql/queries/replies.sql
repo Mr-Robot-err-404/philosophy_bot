@@ -23,7 +23,7 @@ SET video_id = ?
 WHERE id = ?
 RETURNING *;
 
--- name: UpdateLikes :one
+-- name: UpdateReplyLikes :one
 UPDATE replies
 SET likes = ?
 WHERE id = ?

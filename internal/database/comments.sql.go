@@ -114,3 +114,27 @@ func (q *Queries) GetPopularComments(ctx context.Context) ([]GetPopularCommentsR
 	}
 	return items, nil
 }
+
+const updateCommentLikes = `-- name: UpdateCommentLikes :one
+UPDATE comments 
+SET likes = ?
+WHERE id = ?
+RETURNING id, likes, quote_id, created_at
+`
+
+type UpdateCommentLikesParams struct {
+	Likes int64
+	ID    string
+}
+
+func (q *Queries) UpdateCommentLikes(ctx context.Context, arg UpdateCommentLikesParams) (Comment, error) {
+	row := q.db.QueryRowContext(ctx, updateCommentLikes, arg.Likes, arg.ID)
+	var i Comment
+	err := row.Scan(
+		&i.ID,
+		&i.Likes,
+		&i.QuoteID,
+		&i.CreatedAt,
+	)
+	return i, err
+}

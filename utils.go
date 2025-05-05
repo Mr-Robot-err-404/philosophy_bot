@@ -76,15 +76,29 @@ func filter(arr []string, vid_map map[string]bool) []string {
 	return slice
 }
 
-func makeLikeMap(replies []database.Reply) map[string]int {
+func makeLikeMap[C GenericComment](comments []C) map[string]int {
 	likeMap := make(map[string]int)
 
-	for _, item := range replies {
-		id := item.ID
-		likes := item.Likes
+	for _, item := range comments {
+		id := item.GetID()
+		likes := item.GetLikes()
 		likeMap[id] = int(likes)
 	}
 	return likeMap
+}
+
+func statsQuota(isReplies bool, base int) (int, int) {
+	if isReplies {
+		return base * 2, 50
+	}
+	return base, 100
+}
+func toggle(isReplies *bool) {
+	if *isReplies {
+		*isReplies = false
+		return
+	}
+	*isReplies = true
 }
 
 func makeVidMap(videos []string) map[string]bool {
@@ -114,11 +128,11 @@ func check(e error) {
 	}
 }
 
-func reduceReplies(replies []database.Reply) []string {
+func reduceReplies[C GenericComment](comments []C) []string {
 	arr := []string{}
 
-	for _, curr := range replies {
-		arr = append(arr, curr.ID)
+	for _, curr := range comments {
+		arr = append(arr, curr.GetID())
 	}
 	return arr
 }

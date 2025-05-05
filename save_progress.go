@@ -31,7 +31,7 @@ func saveProgress(replies []WiseReply, dbComms *DbComms, logs chan<- Log) {
 			logs <- Log{Err: resp.err}
 			continue
 		}
-		msg += resp.reply.ID
+		msg += fmt.Sprintf("%s | ", resp.reply.ID)
 	}
 	logs <- Log{Msg: msg}
 }
@@ -76,21 +76,27 @@ func storeProgress(replies []WiseReply) {
 	logErrors(err_resp)
 }
 
-func updateLikes(stats []UpdatedStats) ([]database.Reply, []error) {
-	err_resp := []error{}
-	success := []database.Reply{}
+func storeLikes(stats []UpdatedStats, logs chan<- Log, table string) {
+	c := 0
 
 	for _, curr := range stats {
-		params := database.UpdateLikesParams{Likes: int64(curr.likes), ID: curr.id}
-		reply, err := queries.UpdateLikes(ctx, params)
+		var err error
+
+		if table == "replies" {
+			params := database.UpdateReplyLikesParams{Likes: int64(curr.likes), ID: curr.id}
+			_, err = queries.UpdateReplyLikes(ctx, params)
+		} else {
+			params := database.UpdateCommentLikesParams{Likes: int64(curr.likes), ID: curr.id}
+			_, err = queries.UpdateCommentLikes(ctx, params)
+		}
 
 		if err != nil {
-			err_resp = append(err_resp, err)
+			logs <- Log{Err: err}
 			continue
 		}
-		success = append(success, reply)
+		c++
 	}
-	return success, err_resp
+	logs <- Log{Msg: fmt.Sprintf("Updated %d likes for %s", c, table)}
 }
 
 func unique_vids(replies []WiseReply) []string {

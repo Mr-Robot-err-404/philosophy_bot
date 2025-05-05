@@ -15,3 +15,9 @@ VALUES (
 	datetime('now')
 )
 RETURNING *;
+
+-- name: UpdateCommentLikes :one
+UPDATE comments 
+SET likes = ?
+WHERE id = ?
+RETURNING *;

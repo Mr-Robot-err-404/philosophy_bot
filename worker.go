@@ -52,7 +52,7 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 	elapsed := time.Since(payload.Published.Time)
 
 	if elapsed > Threshold {
-		comms.logs <- Log{Msg: fmt.Sprintf("Published long ago: %v | %v | %v", payload.VideoId, published, elapsed)}
+		comms.logs <- Log{Msg: fmt.Sprintf("Published long ago -> %v | %v | %v", payload.VideoId, published, elapsed)}
 		return
 	}
 	printBreak()
@@ -61,13 +61,13 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 	fmt.Println("PUBLISHED   -> ", payload.Published.Time)
 
 	if points < 500 {
-		comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota points: %d", points)}
+		comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota points -> %d", points)}
 		return
 	}
 	resp := findChannel(payload.ChannelId, dbComms.rd.get)
 
 	if resp.err != nil {
-		comms.logs <- Log{Err: fmt.Errorf("Couldn't find channel. ID: %s\n", payload.ChannelId)}
+		comms.logs <- Log{Err: fmt.Errorf("Couldn't find channel -> %s\n", payload.ChannelId)}
 		return
 	}
 	channel := resp.channel
@@ -75,7 +75,7 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 	defer cleanup(&c, channel.ID, comms.logs, cfg.dbComms.seenVid)
 
 	if c < channel.Frequency {
-		comms.logs <- Log{Msg: fmt.Sprintf("Skipped for low frequency: %s", channel.Handle)}
+		comms.logs <- Log{Msg: fmt.Sprintf("Skipped for low frequency -> %s", channel.Handle)}
 		return
 	}
 	c = 0
@@ -86,7 +86,9 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 	trending := time.NewTicker(30 * time.Minute)
 	refresh := time.NewTicker(50 * time.Minute)
 	quota := time.NewTicker(25 * time.Hour)
-	stats := time.NewTicker(51 * time.Hour)
+	statsCron := time.NewTicker(21 * time.Hour)
+
+	alternate := false
 
 	for {
 		select {
@@ -108,13 +110,23 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 			state := readServerState(comms.rd)
 
 			if state.QuotaPoints < 3250 {
-				comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota points for trending cron: %d", state.QuotaPoints)}
+				comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota points for trending cron -> %d", state.QuotaPoints)}
 				return
 			}
 			wisdom := enlightenTrendingPage(comms, state)
 			saveProgress(wisdom, dbComms, comms.logs)
 
-		case <-stats.C:
+		case <-statsCron.C:
+			state := readServerState(comms.rd)
+			minimum, width := statsQuota(alternate, 1250)
+
+			if state.QuotaPoints < minimum {
+				comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota for stats cron -> %d", state.QuotaPoints)}
+				toggle(&alternate)
+				return
+			}
+			info := StatsCall{key: state.Credentials.key, logs: comms.logs, width: width}
+			stats(dbComms, &alternate, info)
 		}
 	}
 }
@@ -142,12 +154,12 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms
 		channelId := curr.ChannelId
 
 		if curr.Err != nil {
-			comms.logs <- Log{Err: fmt.Errorf("Task err: %s", curr.Err.Error())}
+			comms.logs <- Log{Err: fmt.Errorf("Task err -> %s", curr.Err.Error())}
 			continue
 		}
 		_, exists := state.Seen[videoId]
 		if exists {
-			comms.logs <- Log{Msg: fmt.Sprintf("Video already visited: %s", videoId)}
+			comms.logs <- Log{Msg: fmt.Sprintf("Video already visited -> %s", videoId)}
 			continue
 		}
 		comms.writeSeen <- videoId
@@ -160,7 +172,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms
 		resp := getUnusedQuotes(channelId, dbComms.rd.unused)
 
 		if resp.err != nil {
-			comms.logs <- Log{Err: fmt.Errorf("Task err: %s", resp.err.Error())}
+			comms.logs <- Log{Err: fmt.Errorf("Task err -> %s", resp.err.Error())}
 			continue
 		}
 		stack := shuffleStack(resp.quotes)
@@ -172,7 +184,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms
 		payload.Snippet.TopLevelComment.Snippet.TextOriginal = constructWisdom(q.Quote, q.Author)
 
 		info := CommentInfo{VideoId: videoId, ChannelId: channelId, QuoteId: q.ID, Payload: payload}
-		comms.logs <- Log{Msg: fmt.Sprintf("Received task: %v", info)}
+		comms.logs <- Log{Msg: fmt.Sprintf("Received task -> channel: %s | video: %s | quote: %d", info.ChannelId, info.VideoId, info.QuoteId)}
 		comms.points <- UpdateQuotaPoints{value: state.QuotaPoints - COMMENT_COST}
 
 		dbComms.saveUsage <- Usage{channelId: channelId, quoteId: q.ID}
@@ -184,7 +196,7 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms
 func receiveTaskResults(ch <-chan TaskResult, logs chan<- Log, dbComms *DbComms) {
 	for result := range ch {
 		if result.Err != nil {
-			logs <- Log{Err: fmt.Errorf("Task failed successfully: %s", result.Err.Error())}
+			logs <- Log{Err: fmt.Errorf("Task failed successfully -> %s", result.Err.Error())}
 			continue
 		}
 		params := database.CreateCommentParams{ID: result.Id, QuoteID: result.Info.QuoteId}
@@ -195,7 +207,7 @@ func receiveTaskResults(ch <-chan TaskResult, logs chan<- Log, dbComms *DbComms)
 func executeTask(ch chan<- TaskResult, info CommentInfo, credentials Credentials, delay time.Duration, logs chan<- Log) {
 	logs <- Log{Msg: fmt.Sprintf("Sleep for %v", delay)}
 	time.Sleep(delay)
-	logs <- Log{Msg: fmt.Sprintf("Posting comment... | video_id: %s", info.VideoId)}
+	logs <- Log{Msg: fmt.Sprintf("Posting comment -> video: %s", info.VideoId)}
 	postComment(info, credentials, ch)
 }
 

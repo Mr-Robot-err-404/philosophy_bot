@@ -57,7 +57,7 @@ func main() {
 		return
 	}
 	if *stats_mode {
-		stats(cache, credentials.key)
+		// stats(cache, credentials.key)
 		return
 	}
 	if *philosophy_mode == false {

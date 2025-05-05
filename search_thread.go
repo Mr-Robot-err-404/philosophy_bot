@@ -9,14 +9,14 @@ import (
 )
 
 type ThreadSnippet struct {
-	ChannelId       string  `json:"channelId"`
-	VideoId         string  `json:"videoId"`
-	TopLevelComment Comment `json:"topLevelComment"`
-	TotalReplyCount int     `json:"totalReplyCount"`
-	CanReply        bool    `json:"canReply"`
+	ChannelId       string      `json:"channelId"`
+	VideoId         string      `json:"videoId"`
+	TopLevelComment CommentData `json:"topLevelComment"`
+	TotalReplyCount int         `json:"totalReplyCount"`
+	CanReply        bool        `json:"canReply"`
 }
 
-type Comment struct {
+type CommentData struct {
 	Snippet struct {
 		TextDisplay string `json:"textDisplay"`
 		LikeCount   int    `json:"likeCount"`

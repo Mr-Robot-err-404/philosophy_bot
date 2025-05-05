@@ -8,12 +8,36 @@ import (
 
 type TableCache struct {
 	quotes   []database.Cornucopium
-	comments []database.Comment
-	replies  []database.Reply
+	comments []Comment
+	replies  []Reply
 	videos   []string
 	channels []database.Channel
 	login    database.Login
 	quota    database.Quotum
+}
+type Reply struct {
+	database.Reply
+}
+type Comment struct {
+	database.Comment
+}
+
+func (C Comment) GetID() string {
+	return C.ID
+}
+func (C Comment) GetLikes() int64 {
+	return C.Likes
+}
+func (R Reply) GetID() string {
+	return R.ID
+}
+func (R Reply) GetLikes() int64 {
+	return R.Likes
+}
+
+type GenericComment interface {
+	GetID() string
+	GetLikes() int64
 }
 
 func getTableCache(access_token *string) (TableCache, error) {
@@ -71,12 +95,26 @@ func getTableCache(access_token *string) (TableCache, error) {
 		quota.UpdatedAt = updated
 	}
 	cache.channels = channels
-	cache.comments = comments
-	cache.replies = replies
+	cache.comments = convertComments(comments)
+	cache.replies = convertReplies(replies)
 	cache.login = login
 	cache.quota = quota
 	cache.quotes = quotes
 	cache.videos = videos
 
 	return cache, nil
+}
+func convertComments(comments []database.Comment) []Comment {
+	resp := []Comment{}
+	for _, curr := range comments {
+		resp = append(resp, Comment{curr})
+	}
+	return resp
+}
+func convertReplies(replies []database.Reply) []Reply {
+	resp := []Reply{}
+	for _, curr := range replies {
+		resp = append(resp, Reply{curr})
+	}
+	return resp
 }

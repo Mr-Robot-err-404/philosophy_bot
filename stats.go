@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bot/philosophy/internal/database"
 	"bot/philosophy/internal/helper"
 	"encoding/json"
 	"fmt"
@@ -38,11 +37,15 @@ type UpdatedStats struct {
 	likes int
 	id    string
 }
+type StatsCall struct {
+	key   string
+	logs  chan<- Log
+	width int
+}
 
-func updateStats(replies []database.Reply, key string, likeMap map[string]int) []UpdatedStats {
-	mat := splitWorkload(replies)
+func updateStats[C GenericComment](comments []C, info StatsCall, likeMap map[string]int) []UpdatedStats {
+	mat := splitWorkload(comments, info.width)
 	stats := []UpdatedStats{}
-	err_resp := []error{}
 
 	var wg sync.WaitGroup
 	ch := make(chan StatsChan)
@@ -50,7 +53,7 @@ func updateStats(replies []database.Reply, key string, likeMap map[string]int) [
 
 	for _, curr := range mat {
 		wg.Add(1)
-		go retrieveStats(curr, key, ch, &wg)
+		go retrieveStats(curr, info.key, ch, &wg)
 	}
 	go func() {
 		for {
@@ -60,7 +63,7 @@ func updateStats(replies []database.Reply, key string, likeMap map[string]int) [
 				continue
 			}
 			if resp.Err != nil {
-				err_resp = append(err_resp, resp.Err)
+				info.logs <- Log{Err: resp.Err}
 				continue
 			}
 			updates := compareLikes(likeMap, resp.Data)
@@ -71,15 +74,14 @@ func updateStats(replies []database.Reply, key string, likeMap map[string]int) [
 	close(ch)
 	<-done
 
-	logErrors(err_resp)
 	return stats
 }
 
-func retrieveStats(replies []database.Reply, key string, ch chan<- StatsChan, wg *sync.WaitGroup) {
+func retrieveStats[C GenericComment](comments []C, key string, ch chan<- StatsChan, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var stats Stats
 
-	payload := reduceReplies(replies)
+	payload := reduceReplies(comments)
 	url, err := helper.BuildStatsUrl(payload, key)
 
 	if err != nil {
@@ -110,14 +112,42 @@ func retrieveStats(replies []database.Reply, key string, ch chan<- StatsChan, wg
 	ch <- StatsChan{Data: stats.Items}
 }
 
-func stats(cache TableCache, key string) {
-	likeMap := makeLikeMap(cache.replies)
-	stats := updateStats(cache.replies, key, likeMap)
-	_, err_resp := updateLikes(stats)
+func getStats[C GenericComment](comments []C, key string, logs chan<- Log, width int) []UpdatedStats {
+	likeMap := makeLikeMap(comments)
+	info := StatsCall{key: key, logs: logs, width: width}
 
-	logErrors(err_resp)
+	return updateStats(comments, info, likeMap)
 
-	fmt.Println("Updated stats: ", len(stats))
+}
+
+func stats(dbComms *DbComms, alternate *bool, info StatsCall) {
+	defer toggle(alternate)
+
+	if *alternate {
+		resp := getReplies(dbComms.rd.replies)
+
+		if resp.err != nil {
+			info.logs <- Log{Err: resp.err}
+			return
+		}
+		stats := getStats(resp.replies, info.key, info.logs, info.width)
+
+		if len(stats) > 0 {
+			storeLikes(stats, info.logs, "replies")
+		}
+		return
+	}
+	resp := getComments(dbComms.rd.comments)
+
+	if resp.err != nil {
+		info.logs <- Log{Err: resp.err}
+		return
+	}
+	stats := getStats(resp.comments, info.key, info.logs, info.width)
+
+	if len(stats) > 0 {
+		storeLikes(stats, info.logs, "comments")
+	}
 }
 
 func compareLikes(likeMap map[string]int, updates []StatsItem) []UpdatedStats {
@@ -138,21 +168,20 @@ func compareLikes(likeMap map[string]int, updates []StatsItem) []UpdatedStats {
 	return stats
 }
 
-func splitWorkload(replies []database.Reply) [][]database.Reply {
-	mat := [][]database.Reply{}
-	const width = 50
+func splitWorkload[C GenericComment](comments []C, width int) [][]C {
+	mat := [][]C{}
 
-	if len(replies) == 0 {
+	if len(comments) == 0 {
 		return mat
 	}
 	start := 0
-	end := width
+	end := min(width, len(comments))
 
 	for {
-		chunk := replies[start:end]
+		chunk := comments[start:end]
 		mat = append(mat, chunk)
 
-		if end >= len(replies) {
+		if end >= len(comments) {
 			break
 		}
 		start = end

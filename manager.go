@@ -18,8 +18,20 @@ type DbReadComms struct {
 	get             chan GetChannel
 	getAll          chan GetAll
 	unused          chan GetUnused
+	replies         chan GetReplies
+	comments        chan GetComments
 	popularComments chan PopularComments
 	popularReplies  chan PopularReplies
+}
+type GetComments struct{ resp chan CommentResp }
+type CommentResp struct {
+	err      error
+	comments []Comment
+}
+type GetReplies struct{ resp chan RepliesResp }
+type RepliesResp struct {
+	err     error
+	replies []Reply
 }
 type GetUnused struct {
 	id   string
@@ -104,7 +116,7 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 				logs <- Log{Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Posted comment: %s", saved.ID)}
+			logs <- Log{Msg: fmt.Sprintf("Posted comment -> %s", saved.ID)}
 
 		case wisdom := <-comms.wisdom:
 			quote, err := queries.CreateQuote(ctx, wisdom.epiphany)
@@ -121,6 +133,24 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 		case unused := <-comms.rd.unused:
 			quotes, err := queries.SelectUnusedQuotes(ctx, unused.id)
 			unused.resp <- UnusedResp{quotes: quotes, err: err}
+
+		case comments := <-comms.rd.comments:
+			resp, err := queries.GetComments(ctx)
+
+			if err != nil {
+				comments.resp <- CommentResp{err: err}
+				continue
+			}
+			comments.resp <- CommentResp{comments: convertComments(resp)}
+
+		case replies := <-comms.rd.replies:
+			resp, err := queries.GetReplies(ctx)
+
+			if err != nil {
+				replies.resp <- RepliesResp{err: err}
+				continue
+			}
+			replies.resp <- RepliesResp{replies: convertReplies(resp)}
 
 		case popular := <-comms.rd.popularComments:
 			comments, err := queries.GetPopularComments(ctx)
@@ -154,7 +184,7 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 				logs <- Log{Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Saved usage. channel: %v | quote: %v", usage.channelId, usage.quoteId)}
+			logs <- Log{Msg: fmt.Sprintf("Saved usage -> channel: %s | quote: %d", usage.channelId, usage.quoteId)}
 
 		case quota := <-comms.saveQuota:
 			n, err := queries.UpdateQuota(ctx, int64(quota))

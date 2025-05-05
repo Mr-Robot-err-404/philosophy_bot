@@ -102,6 +102,22 @@ func getPopularReplies(popular chan<- PopularReplies) PopularRepliesResp {
 	return <-ch
 }
 
+func getReplies(replies chan<- GetReplies) RepliesResp {
+	ch := make(chan RepliesResp)
+	defer close(ch)
+
+	replies <- GetReplies{resp: ch}
+	return <-ch
+}
+
+func getComments(comments chan<- GetComments) CommentResp {
+	ch := make(chan CommentResp)
+	defer close(ch)
+
+	comments <- GetComments{resp: ch}
+	return <-ch
+}
+
 func unsubscribeChannels(callback string, bearer string) error {
 	channels, err := queries.GetChannels(ctx)
 	if err != nil {
