@@ -3,7 +3,10 @@ package main
 import (
 	"bot/philosophy/internal/database"
 	"fmt"
+	"time"
 )
+
+const Month = 30 * 24 * 3600
 
 type rdChannelResp struct {
 	channel database.Channel
@@ -86,8 +89,10 @@ func stateManager(initial ServerState, comms *Comms, dbComms *DbComms) {
 			state.Seen[id] = true
 
 		case log := <-comms.logs:
-			printLog(log)
+			log.Ts = time.Now()
 			state.LogHistory = append(state.LogHistory, log)
+
+			printLog(log)
 
 			if len(state.LogHistory) >= 1000 {
 				state.LogHistory = state.LogHistory[1:]
@@ -135,7 +140,9 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 			unused.resp <- UnusedResp{quotes: quotes, err: err}
 
 		case comments := <-comms.rd.comments:
-			resp, err := queries.GetComments(ctx)
+			diff := time.Now().Unix() - int64(3*Month)
+			ts := time.Unix(diff, 0)
+			resp, err := queries.GetValidComments(ctx, ts)
 
 			if err != nil {
 				comments.resp <- CommentResp{err: err}
@@ -144,7 +151,9 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 			comments.resp <- CommentResp{comments: convertComments(resp)}
 
 		case replies := <-comms.rd.replies:
-			resp, err := queries.GetReplies(ctx)
+			diff := time.Now().Unix() - int64(3*Month)
+			ts := time.Unix(diff, 0)
+			resp, err := queries.GetValidReplies(ctx, ts)
 
 			if err != nil {
 				replies.resp <- RepliesResp{err: err}

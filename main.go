@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
+	"time"
 )
 
 const CommentThread = "https://www.googleapis.com/youtube/v3/commentThreads?part=snippet"
@@ -25,23 +24,17 @@ func main() {
 	cmd.Parse(os.Args[1:])
 
 	if *dev_mode {
-		file, err := os.ReadFile("./tmp/test_input/add56bb5-ecfa-4c65-9329-a1a1ee0bed56.xml")
-		if err != nil {
-			log.Fatal(err)
-		}
-		url := "https://f026-81-111-159-136.ngrok-free.app/diogenes/bowl"
-		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(file))
+		sisyphus()
+		diff := time.Now().Unix() - int64(1*Month)
+		ts := time.Unix(diff, 0)
+		resp, err := queries.GetValidReplies(ctx, ts)
 
 		if err != nil {
 			log.Fatal(err)
 		}
-		client := &http.Client{}
-		resp, err := client.Do(req)
-
-		if err != nil {
-			log.Fatal(err)
+		for _, item := range resp {
+			fmt.Println(item.CreatedAt.Format(time.RFC1123))
 		}
-		fmt.Println(resp.Status)
 		return
 	}
 	sisyphus()

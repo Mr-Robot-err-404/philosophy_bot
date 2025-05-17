@@ -4,6 +4,7 @@ import (
 	"bot/philosophy/internal/database"
 	"fmt"
 	"math/rand/v2"
+	"time"
 )
 
 const COMMENT_COST = 50
@@ -38,9 +39,9 @@ func recentLogs(slice []Log) []JsonLog {
 	start := 0
 	end := len(slice) - 1
 
-	for start < end && start < len(slice) && end >= 0 {
+	for start < end && start < len(reversed) && end >= 0 {
 		tmp := reversed[start]
-		reversed[start] = slice[end]
+		reversed[start] = reversed[end]
 		reversed[end] = tmp
 
 		start++
@@ -51,8 +52,14 @@ func recentLogs(slice []Log) []JsonLog {
 
 func JsonLogs(logs []Log) []JsonLog {
 	slice := make([]JsonLog, len(logs))
+
 	for i, log := range logs {
-		slice[i] = JsonLog{Msg: log.Msg, Ts: log.Ts.String(), Err: log.Err.Error()}
+		ts := log.Ts.Format(time.RFC1123)
+		if log.Err != nil {
+			slice[i] = JsonLog{Err: log.Err.Error(), Ts: ts}
+			continue
+		}
+		slice[i] = JsonLog{Msg: log.Msg, Ts: ts}
 	}
 	return slice
 }

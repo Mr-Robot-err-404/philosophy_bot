@@ -27,7 +27,7 @@ type Comment struct {
 	ID        string
 	Likes     int64
 	QuoteID   int64
-	CreatedAt sql.NullTime
+	CreatedAt time.Time
 }
 
 type Cornucopium struct {
@@ -55,7 +55,7 @@ type Reply struct {
 	ID        string
 	Likes     int64
 	QuoteID   int64
-	CreatedAt sql.NullTime
+	CreatedAt time.Time
 	VideoID   string
 }
 

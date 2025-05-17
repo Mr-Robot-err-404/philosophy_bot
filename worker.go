@@ -55,11 +55,6 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 		comms.logs <- Log{Msg: fmt.Sprintf("Published long ago -> %v | %v | %v", payload.VideoId, published, elapsed)}
 		return
 	}
-	printBreak()
-	fmt.Println("CHANNEL_ID -> ", payload.ChannelId)
-	fmt.Println("VIDEO_ID   -> ", payload.VideoId)
-	fmt.Println("PUBLISHED   -> ", payload.Published.Time)
-
 	if points < 500 {
 		comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota points -> %d", points)}
 		return
@@ -114,7 +109,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 				return
 			}
 			wisdom := enlightenTrendingPage(comms, state)
-			saveProgress(wisdom, dbComms, comms.logs)
+			saveProgress(wisdom, dbComms, comms.logs, comms.writeSeen)
 
 		case <-statsCron.C:
 			state := readServerState(comms.rd)

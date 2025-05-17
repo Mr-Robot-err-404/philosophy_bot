@@ -1,6 +1,11 @@
 -- name: GetComments :many
 SELECT * FROM comments;
 
+-- name: GetValidComments :many
+SELECT * FROM comments
+WHERE created_at > ? OR likes > 50;
+
+
 -- name: GetPopularComments :many
 SELECT comments.*, cornucopia.quote, cornucopia.author
 FROM comments JOIN cornucopia ON comments.quote_id = cornucopia.id

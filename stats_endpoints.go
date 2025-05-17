@@ -39,7 +39,7 @@ func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
 	state := readServerState(comms.rd)
 
 	if !checkTkn(req.Header, w, state.Credentials.bearer) {
-		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorizaed")
+		server.ErrorResp(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
 	server.SuccessResp(w, http.StatusOK, recentLogs(state.LogHistory))

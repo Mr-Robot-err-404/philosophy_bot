@@ -7,7 +7,7 @@ package database
 
 import (
 	"context"
-	"database/sql"
+	"time"
 )
 
 const getPopularReplies = `-- name: GetPopularReplies :many
@@ -20,7 +20,7 @@ type GetPopularRepliesRow struct {
 	ID        string
 	Likes     int64
 	QuoteID   int64
-	CreatedAt sql.NullTime
+	CreatedAt time.Time
 	VideoID   string
 	Quote     string
 	Author    string
@@ -63,6 +63,40 @@ SELECT id, likes, quote_id, created_at, video_id FROM replies
 
 func (q *Queries) GetReplies(ctx context.Context) ([]Reply, error) {
 	rows, err := q.db.QueryContext(ctx, getReplies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Reply
+	for rows.Next() {
+		var i Reply
+		if err := rows.Scan(
+			&i.ID,
+			&i.Likes,
+			&i.QuoteID,
+			&i.CreatedAt,
+			&i.VideoID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getValidReplies = `-- name: GetValidReplies :many
+SELECT id, likes, quote_id, created_at, video_id FROM replies
+WHERE created_at > ? OR likes > 50
+`
+
+func (q *Queries) GetValidReplies(ctx context.Context, createdAt time.Time) ([]Reply, error) {
+	rows, err := q.db.QueryContext(ctx, getValidReplies, createdAt)
 	if err != nil {
 		return nil, err
 	}

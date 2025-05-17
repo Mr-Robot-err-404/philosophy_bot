@@ -113,7 +113,10 @@ type Usage struct {
 	quoteId   int64
 }
 
-// TODO: stats cron guardrail - filter old replies & comments
+// TODO:
+// send an email when refresh token expires
+// create endpoint to update refresh token
+// create binary
 
 // HACK:
 // "no u" channel owner listener
@@ -122,9 +125,6 @@ type Usage struct {
 // TEST: -> endpoints
 // update channel freq
 // delete channel
-// log history
-// get quota
-// stats
 
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
@@ -251,7 +251,6 @@ func startServer(startup Startup) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println("App URL", listener.URL())
 	callback := listener.URL() + "/diogenes/bowl"
 
 	go stateManager(serverState, &cfg.comms, &dbComms)
@@ -265,6 +264,8 @@ func startServer(startup Startup) {
 
 	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
 	defer unsubscribeChannels(callback, credentials.bearer)
+
+	comms.logs <- Log{Msg: fmt.Sprintf("APP URL -> %s", listener.URL())}
 
 	err = http.Serve(listener, mux)
 	if err != nil {

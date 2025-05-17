@@ -7,7 +7,7 @@ package database
 
 import (
 	"context"
-	"database/sql"
+	"time"
 )
 
 const createComment = `-- name: CreateComment :one
@@ -80,7 +80,7 @@ type GetPopularCommentsRow struct {
 	ID        string
 	Likes     int64
 	QuoteID   int64
-	CreatedAt sql.NullTime
+	CreatedAt time.Time
 	Quote     string
 	Author    string
 }
@@ -101,6 +101,39 @@ func (q *Queries) GetPopularComments(ctx context.Context) ([]GetPopularCommentsR
 			&i.CreatedAt,
 			&i.Quote,
 			&i.Author,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getValidComments = `-- name: GetValidComments :many
+SELECT id, likes, quote_id, created_at FROM comments
+WHERE created_at > ? OR likes > 50
+`
+
+func (q *Queries) GetValidComments(ctx context.Context, createdAt time.Time) ([]Comment, error) {
+	rows, err := q.db.QueryContext(ctx, getValidComments, createdAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Comment
+	for rows.Next() {
+		var i Comment
+		if err := rows.Scan(
+			&i.ID,
+			&i.Likes,
+			&i.QuoteID,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

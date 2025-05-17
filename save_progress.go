@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func saveProgress(replies []WiseReply, dbComms *DbComms, logs chan<- Log) {
+func saveProgress(replies []WiseReply, dbComms *DbComms, logs chan<- Log, seen chan<- string) {
 	if len(replies) == 0 {
 		return
 	}
@@ -13,6 +13,7 @@ func saveProgress(replies []WiseReply, dbComms *DbComms, logs chan<- Log) {
 	msg := "Saved vids: "
 
 	for _, id := range vids {
+		seen <- id
 		err := simpleMan(id, dbComms.saveVid)
 		if err != nil {
 			logs <- Log{Err: err}

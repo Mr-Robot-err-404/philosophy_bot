@@ -1,6 +1,10 @@
 -- name: GetReplies :many
 SELECT * FROM replies;
 
+-- name: GetValidReplies :many
+SELECT * FROM replies
+WHERE created_at > ? OR likes > 50;
+
 -- name: GetPopularReplies :many
 SELECT replies.*, cornucopia.quote, cornucopia.author
 FROM replies JOIN cornucopia ON replies.quote_id = cornucopia.id
