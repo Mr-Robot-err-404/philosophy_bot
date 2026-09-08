@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>philosophy bot</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>philosophy bot</h1>
+  <span class="meta">generated {{ .Generated }}</span>
+</header>
+
+<main>
+
+<section class="cards">
+  <div class="card"><span class="num">{{ .Totals.Comments }}</span><span class="label">comments</span></div>
+  <div class="card"><span class="num">{{ .Totals.Replies }}</span><span class="label">replies</span></div>
+  <div class="card"><span class="num">{{ .Totals.Videos }}</span><span class="label">videos seen</span></div>
+  <div class="card"><span class="num">{{ .Totals.Quotes }}</span><span class="label">quotes</span></div>
+  <div class="card"><span class="num">{{ .Totals.Channels }}</span><span class="label">channels</span></div>
+  <div class="card"><span class="num">{{ .Quota.Points }}</span><span class="label">quota points</span></div>
+</section>
+
+<div class="grid">
+
+<section class="panel">
+  <h2>quota</h2>
+  <div class="bar"><div class="fill{{ if lt .Quota.Percent 25 }} low{{ end }}" style="width:{{ .Quota.Percent }}%"></div></div>
+  <p class="bar-label">{{ .Quota.Points }} / {{ .Quota.Max }} ({{ .Quota.Percent }}%)</p>
+  <dl>
+    <dt>updated</dt><dd>{{ .Quota.UpdatedAt }}{{ if .Quota.Stale }} <span class="warn">stale</span>{{ end }}</dd>
+    <dt>last login</dt><dd>{{ .Quota.LastLogin }}</dd>
+  </dl>
+</section>
+
+<section class="panel">
+  <h2>health</h2>
+  <dl>
+    <dt>last comment</dt><dd>{{ .Health.LastComment }}</dd>
+    <dt>last reply</dt><dd>{{ .Health.LastReply }}</dd>
+    <dt>idle</dt>
+    <dd>{{ if .Health.Idle }}<span class="warn">{{ .Health.DaysIdle }} days</span>{{ else }}<span class="ok">active</span>{{ end }}</dd>
+    <dt>quote pool</dt><dd>{{ .UnusedPool }} unused / {{ .Totals.Quotes }}</dd>
+  </dl>
+</section>
+
+</div>
+
+<section class="panel">
+  <h2>activity <span class="meta">last 30 days</span></h2>
+  <div class="chart">
+    {{ range .Activity }}
+    <div class="col" title="{{ .Date }} — {{ .Comments }} comments, {{ .Replies }} replies">
+      <div class="stack" style="height:{{ .Percent }}%"></div>
+      <span class="tick">{{ if .Total }}{{ .Total }}{{ end }}</span>
+    </div>
+    {{ end }}
+  </div>
+</section>
+
+<div class="grid">
+
+<section class="panel">
+  <h2>top comments</h2>
+  {{ if .TopComments }}
+  <table>
+    <thead><tr><th>likes</th><th>quote</th><th>posted</th></tr></thead>
+    <tbody>
+    {{ range .TopComments }}
+      <tr>
+        <td class="num-cell">{{ .Likes }}</td>
+        <td>{{ truncate 60 .Quote }}{{ if .Author }}<span class="author">— {{ .Author }}</span>{{ end }}</td>
+        <td class="meta">{{ .Created }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}<p class="empty">no comments yet</p>{{ end }}
+</section>
+
+<section class="panel">
+  <h2>top replies</h2>
+  {{ if .TopReplies }}
+  <table>
+    <thead><tr><th>likes</th><th>quote</th><th>posted</th></tr></thead>
+    <tbody>
+    {{ range .TopReplies }}
+      <tr>
+        <td class="num-cell">{{ .Likes }}</td>
+        <td>{{ if .Quote }}{{ truncate 60 .Quote }}{{ if .Author }}<span class="author">— {{ .Author }}</span>{{ end }}{{ else }}<span class="meta">unlinked</span>{{ end }}</td>
+        <td class="meta">{{ .Created }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}<p class="empty">no replies yet</p>{{ end }}
+</section>
+
+</div>
+
+<section class="panel">
+  <h2>most used quotes</h2>
+  {{ if .TopQuotes }}
+  <table>
+    <thead><tr><th>uses</th><th>channels</th><th>quote</th></tr></thead>
+    <tbody>
+    {{ range .TopQuotes }}
+      <tr>
+        <td class="num-cell">{{ .Uses }}</td>
+        <td class="num-cell">{{ .Channels }}</td>
+        <td>{{ truncate 80 .Quote }}<span class="author">— {{ .Author }}</span></td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}<p class="empty">no quote usage recorded</p>{{ end }}
+</section>
+
+<section class="panel">
+  <h2>channels</h2>
+  {{ if .Channels }}
+  <table>
+    <thead><tr><th>handle</th><th>title</th><th>freq</th><th>since post</th><th>quotes used</th></tr></thead>
+    <tbody>
+    {{ range .Channels }}
+      <tr>
+        <td>{{ .Handle }}</td>
+        <td>{{ truncate 40 .Title }}</td>
+        <td class="num-cell">{{ .Frequency }}</td>
+        <td class="num-cell">{{ .VideosSincePost }}</td>
+        <td class="num-cell">{{ .QuotesUsed }}</td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}<p class="empty">no channels subscribed — the webhook path is inert</p>{{ end }}
+</section>
+
+</main>
+</body>
+</html>
