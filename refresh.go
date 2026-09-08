@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -16,17 +15,15 @@ type OAuthResp struct {
 	Access_token string
 }
 
-func refresh_token() (string, error) {
+func refresh_token(tkn string) (string, error) {
 	config, err := extractGoogleConfig("client_secret.json")
 	if err != nil {
 		return "", err
 	}
-	refresh_token := os.Getenv("REFRESH_TOKEN")
-
 	data := url.Values{}
 	data.Set("client_id", config.ClientID)
 	data.Set("client_secret", config.ClientSecret)
-	data.Set("refresh_token", refresh_token)
+	data.Set("refresh_token", tkn)
 	data.Set("grant_type", "refresh_token")
 
 	route := "https://www.googleapis.com/oauth2/v4/token"
@@ -52,8 +49,8 @@ func refresh_token() (string, error) {
 	return s.Access_token, nil
 }
 
-func refreshAndRenewToken(tkn *string) error {
-	access_token, err := refresh_token()
+func refreshAndRenewToken(tkn *string, refresh_tkn string) error {
+	access_token, err := refresh_token(refresh_tkn)
 	if err != nil {
 		return err
 	}
@@ -62,8 +59,8 @@ func refreshAndRenewToken(tkn *string) error {
 	return err
 }
 
-func renewSession(id string, tkn *string) (time.Time, error) {
-	err := refreshAndRenewToken(tkn)
+func renewSession(id string, tkn *string, refresh_tkn string) (time.Time, error) {
+	err := refreshAndRenewToken(tkn, refresh_tkn)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -72,26 +69,6 @@ func renewSession(id string, tkn *string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return login.LastLogin, nil
-}
-
-func checkAccessToken(access_token *string) error {
-	login, err := queries.GetLoginDetails(ctx)
-
-	if err != nil {
-		return err
-	}
-	now := time.Now().Unix()
-	elapsed := now - login.LastLogin.Unix()
-
-	if elapsed > 2900 {
-		ts, err := renewSession(login.ID, access_token)
-		if err != nil {
-			return err
-		}
-		fmt.Println("refreshed session")
-		login.LastLogin = ts
-	}
-	return nil
 }
 
 func refresh_quota(id string) (time.Time, error) {

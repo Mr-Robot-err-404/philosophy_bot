@@ -40,7 +40,7 @@ type GenericComment interface {
 	GetLikes() int64
 }
 
-func getTableCache(access_token *string) (TableCache, error) {
+func getTableCache(credentials *Credentials) (TableCache, error) {
 	var cache TableCache
 
 	quotes, err := queries.GetQuotes(ctx)
@@ -79,7 +79,7 @@ func getTableCache(access_token *string) (TableCache, error) {
 	fmt.Println("time since last login: ", elapsed, "sec")
 
 	if elapsed > 3000 {
-		ts, err := renewSession(login.ID, access_token)
+		ts, err := renewSession(login.ID, &credentials.access_token, credentials.refresh_token)
 		if err != nil {
 			return TableCache{}, err
 		}

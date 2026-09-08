@@ -83,7 +83,10 @@ func stateManager(initial ServerState, comms *Comms, dbComms *DbComms) {
 			rd.resp <- state
 
 		case wr := <-comms.writeTkn:
-			state.Credentials.access_token = wr.access_token
+			state.Credentials.access_token = wr.token
+
+		case refresh := <-comms.refreshTkn:
+			state.Credentials.refresh_token = refresh.token
 
 		case wisdom := <-comms.writeWisdom:
 			state.Quotes = append(state.Quotes, wisdom.quote)

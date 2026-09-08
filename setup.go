@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bot/philosophy/email"
 	"bot/philosophy/internal/database"
 	"context"
 	"database/sql"
@@ -55,6 +56,15 @@ func init_tables() error {
 	}
 	id = "sisyphus_smiled"
 	return generateLoginTable(id)
+}
+
+func getEmailPayload() email.Payload {
+	username := os.Getenv("EMAIL_USERNAME")
+	pwd := os.Getenv("EMAIL_PWD")
+	to := os.Getenv("EMAIL_TO")
+	msg := "Philosophy Bot may need a new refresh token boss"
+	subject := "Beep Bop, I'm tired boss..."
+	return email.Payload{Username: username, Pwd: pwd, To: to, Msg: msg, Subject: subject}
 }
 
 func generateQuotaTable(id string) error {

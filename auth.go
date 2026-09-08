@@ -20,7 +20,12 @@ func authenticate_account() error {
 	if err != nil {
 		return err
 	}
-	requestCredentials(config)
+	access, refresh_token := requestCredentials(config)
+	printBreak()
+	fmt.Println("access token -> ", access)
+	fmt.Println("refresh token -> ", refresh_token)
+	printBreak()
+
 	return nil
 }
 
@@ -72,7 +77,7 @@ func saveCredentials(token *oauth2.Token) error {
 
 }
 
-func requestCredentials(config *oauth2.Config) {
+func requestCredentials(config *oauth2.Config) (string, string) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -107,7 +112,6 @@ func requestCredentials(config *oauth2.Config) {
 
 	if !token.Valid() {
 		log.Fatalf("Can't get source information without accessToken: %v", err)
-		return
 	}
 
 	fmt.Println("token received, shutting down local server...")
@@ -115,20 +119,13 @@ func requestCredentials(config *oauth2.Config) {
 	if err := srv.Shutdown(context.Background()); err != nil {
 		log.Fatalf("Failed to shut down server: %v", err)
 	}
-	printBreak()
-	fmt.Println("access token -> ", token.AccessToken)
-	fmt.Println("refresh token -> ", token.RefreshToken)
-	printBreak()
-	err = saveCredentials(token)
-	if err != nil {
-		log.Fatal("failed to save credentials to env file")
-	}
-	fmt.Println("credentials saved")
+	return token.AccessToken, token.RefreshToken
 }
 
 func getCredentials() Credentials {
 	access_token := os.Getenv("ACCESS_TOKEN")
+	refresh_token := os.Getenv("REFRESH_TOKEN")
 	key := os.Getenv("QUOTE_API_KEY")
 	bearer := os.Getenv("BEARER")
-	return Credentials{key: key, access_token: access_token, bearer: bearer}
+	return Credentials{key: key, access_token: access_token, bearer: bearer, refresh_token: refresh_token}
 }
