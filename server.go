@@ -5,12 +5,15 @@ import (
 	"bot/philosophy/internal/auth"
 	"bot/philosophy/internal/database"
 	"bot/philosophy/internal/server"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -222,6 +225,10 @@ func appHandler(prefix string, h http.Handler) http.Handler {
 }
 
 func startServer(startup Startup) {
+	signals, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	done := make(chan struct{})
 	mux := http.NewServeMux()
 	credentials, quotes := startup.credentials, startup.quotes
 	channels, seen := startup.channels, startup.seen
@@ -229,13 +236,15 @@ func startServer(startup Startup) {
 	cfg := Config{}
 	comms := Comms{}
 	dbComms := DbComms{}
+	schedule, notes := resumeSchedule(time.Now())
+
 	serverState := ServerState{
 		Credentials: credentials,
 		Quotes:      quotes,
 		QuotaPoints: int(startup.cache.quota.Quota),
 		Seen:        seen,
 		LogHistory:  make([]Log, 0, MaxLogHistory),
-		Schedule:    newSchedule(time.Now()),
+		Schedule:    schedule,
 	}
 
 	initComms(&comms, &dbComms)
@@ -276,11 +285,10 @@ func startServer(startup Startup) {
 	go receiveJobs(cfg.jobs, results, &cfg.comms, &dbComms)
 	go receiveTaskResults(results, cfg.comms.logs, &dbComms)
 
-	go serverCronJob(&cfg.comms, &cfg.dbComms, cfg.email)
+	go serverCronJob(&cfg.comms, &cfg.dbComms, cfg.email, serverState.Schedule, done)
 	go renewSubscription(cfg.comms.logs, callback, credentials.bearer, &cfg.dbComms)
 
 	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
-	defer unsubscribeChannels(callback, credentials.bearer)
 
 	printBanner([]string{
 		"philosophy bot",
@@ -289,6 +297,10 @@ func startServer(startup Startup) {
 		listener.URL(),
 	})
 	comms.logs <- Log{Scope: "http", Msg: fmt.Sprintf("Public callback -> %s", callback)}
+
+	for _, note := range notes {
+		comms.logs <- Log{Scope: "cron", Msg: note}
+	}
 
 	local := &http.Server{
 		Addr:         startup.addr,
@@ -305,9 +317,50 @@ func startServer(startup Startup) {
 		}
 	}()
 
-	err = http.Serve(listener, mux)
-	if err != nil {
-		log.Fatal(err)
+	go func() {
+		if err := http.Serve(listener, mux); err != nil && err != http.ErrServerClosed {
+			comms.logs <- Log{Scope: "http", Msg: "Tunnel listener stopped", Err: err}
+			stop()
+		}
+	}()
+
+	<-signals.Done()
+	stop()
+
+	comms.logs <- Log{Scope: "http", Level: LevelWarn, Msg: "Shutdown signal received"}
+
+	shutdown, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := local.Shutdown(shutdown); err != nil {
+		comms.logs <- Log{Scope: "http", Msg: "Local listener shutdown failed", Err: err}
+	}
+	if err := listener.Close(); err != nil {
+		comms.logs <- Log{Scope: "http", Msg: "Tunnel shutdown failed", Err: err}
+	}
+	persistSchedule(&cfg.comms)
+
+	close(done)
+	unsubscribeChannels(callback, credentials.bearer)
+
+	if err := db.Close(); err != nil {
+		comms.logs <- Log{Scope: "db", Msg: "Failed to close database", Err: err}
+	}
+	printLog(Log{Scope: "http", Msg: "Shutdown complete", Ts: time.Now()})
+}
+
+func persistSchedule(comms *Comms) {
+	state := readServerState(comms.rd)
+
+	if err := saveSchedule(state.Schedule); err != nil {
+		printLog(Log{Scope: "cron", Msg: "Failed to save schedule", Err: err, Ts: time.Now()})
+		return
+	}
+	for _, job := range buildJobs(state.Schedule) {
+		if job.Stopped {
+			continue
+		}
+		printLog(Log{Scope: "cron", Ts: time.Now(), Msg: fmt.Sprintf("Saved %s -> %ds remaining", job.Name, job.Remaining)})
 	}
 }
 

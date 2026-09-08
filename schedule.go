@@ -1,6 +1,10 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"time"
 )
@@ -32,6 +36,15 @@ var jobIntervals = map[string]time.Duration{
 	"quota":    QuotaInterval,
 }
 
+const StartupGrace = 60 * time.Second
+
+func schedulePath() string {
+	if path := os.Getenv("SCHEDULE_PATH"); path != "" {
+		return path
+	}
+	return "./schedule.json"
+}
+
 func newSchedule(start time.Time) map[string]time.Time {
 	schedule := make(map[string]time.Time, len(jobIntervals))
 
@@ -39,6 +52,72 @@ func newSchedule(start time.Time) map[string]time.Time {
 		schedule[name] = start.Add(every)
 	}
 	return schedule
+}
+
+func loadSchedule() (map[string]time.Time, error) {
+	saved := map[string]time.Time{}
+
+	data, err := os.ReadFile(schedulePath())
+	if err != nil {
+		return saved, err
+	}
+	if err := json.Unmarshal(data, &saved); err != nil {
+		return saved, fmt.Errorf("malformed schedule file %q: %w", schedulePath(), err)
+	}
+	return saved, nil
+}
+
+func saveSchedule(schedule map[string]time.Time) error {
+	path := schedulePath()
+
+	data, err := json.MarshalIndent(schedule, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".schedule-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func resumeSchedule(now time.Time) (map[string]time.Time, []string) {
+	saved, err := loadSchedule()
+	if err != nil {
+		return newSchedule(now), nil
+	}
+	schedule := make(map[string]time.Time, len(jobIntervals))
+	notes := []string{}
+
+	for name, every := range jobIntervals {
+		next, ok := saved[name]
+
+		switch {
+		case !ok || next.IsZero():
+			schedule[name] = now.Add(every)
+			notes = append(notes, fmt.Sprintf("%s scheduled fresh", name))
+		case next.After(now):
+			schedule[name] = next
+			notes = append(notes, fmt.Sprintf("%s resumes in %v", name, time.Until(next).Round(time.Second)))
+		default:
+			schedule[name] = now.Add(StartupGrace)
+			notes = append(notes, fmt.Sprintf("%s overdue by %v", name, now.Sub(next).Round(time.Second)))
+		}
+	}
+	return schedule, notes
 }
 
 func buildJobs(schedule map[string]time.Time) []Job {

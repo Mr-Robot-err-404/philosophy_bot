@@ -79,21 +79,31 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 	scheduleJob(payload, cfg.jobs)
 }
 
-func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) {
-	trending := time.NewTicker(TrendingInterval)
-	refresh := time.NewTicker(RefreshInterval)
-	quota := time.NewTicker(QuotaInterval)
-	statsCron := time.NewTicker(StatsInterval)
+func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload, schedule map[string]time.Time, done <-chan struct{}) {
+	trending := time.NewTimer(time.Until(schedule["trending"]))
+	refresh := time.NewTimer(time.Until(schedule["refresh"]))
+	quota := time.NewTimer(time.Until(schedule["quota"]))
+	statsCron := time.NewTimer(time.Until(schedule["stats"]))
+
+	defer trending.Stop()
+	defer refresh.Stop()
+	defer quota.Stop()
+	defer statsCron.Stop()
 
 	alternate := false
 
 	for {
 		select {
+		case <-done:
+			return
+
 		case <-quota.C:
+			quota.Reset(QuotaInterval)
 			comms.schedule <- ScheduleTick{job: "quota", every: QuotaInterval}
 			comms.points <- UpdateQuotaPoints{value: 10000}
 
 		case <-refresh.C:
+			refresh.Reset(RefreshInterval)
 			comms.schedule <- ScheduleTick{job: "refresh", every: RefreshInterval}
 			state := readServerState(comms.rd)
 			access_token, err := refresh_token(state.Credentials.refresh_token)
@@ -119,6 +129,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) 
 			comms.logs <- Log{Scope: "auth", Msg: "Renewed access token"}
 
 		case <-trending.C:
+			trending.Reset(TrendingInterval)
 			comms.schedule <- ScheduleTick{job: "trending", every: TrendingInterval}
 			state := readServerState(comms.rd)
 
@@ -130,6 +141,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) 
 			saveProgress(wisdom, dbComms, comms.logs, comms.writeSeen)
 
 		case <-statsCron.C:
+			statsCron.Reset(StatsInterval)
 			comms.schedule <- ScheduleTick{job: "stats", every: StatsInterval}
 			state := readServerState(comms.rd)
 			minimum, width := statsQuota(alternate, 1250)
