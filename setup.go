@@ -55,8 +55,7 @@ func init_tables() error {
 		return err
 	}
 	id = "sisyphus_smiled"
-	err = generateLoginTable(id)
-	return nil
+	return generateLoginTable(id)
 }
 
 func generateQuotaTable(id string) error {

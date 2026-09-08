@@ -35,17 +35,10 @@ func seenMap(vids []string) map[string]bool {
 }
 
 func recentLogs(slice []Log) []JsonLog {
-	reversed := slice
-	start := 0
-	end := len(slice) - 1
+	reversed := make([]Log, len(slice))
 
-	for start < end && start < len(reversed) && end >= 0 {
-		tmp := reversed[start]
-		reversed[start] = reversed[end]
-		reversed[end] = tmp
-
-		start++
-		end--
+	for i, log := range slice {
+		reversed[len(slice)-1-i] = log
 	}
 	return JsonLogs(reversed)
 }

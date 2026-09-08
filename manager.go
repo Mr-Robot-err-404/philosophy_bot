@@ -8,6 +8,9 @@ import (
 
 const Month = 30 * 24 * 3600
 
+// MaxLogHistory caps the in-memory log ring held by stateManager.
+const MaxLogHistory = 1000
+
 type rdChannelResp struct {
 	channel database.Channel
 	err     error
@@ -90,13 +93,14 @@ func stateManager(initial ServerState, comms *Comms, dbComms *DbComms) {
 
 		case log := <-comms.logs:
 			log.Ts = time.Now()
-			state.LogHistory = append(state.LogHistory, log)
-
 			printLog(log)
 
-			if len(state.LogHistory) >= 1000 {
-				state.LogHistory = state.LogHistory[1:]
+			if len(state.LogHistory) < MaxLogHistory {
+				state.LogHistory = append(state.LogHistory, log)
+				continue
 			}
+			copy(state.LogHistory, state.LogHistory[1:])
+			state.LogHistory[MaxLogHistory-1] = log
 		case quota := <-comms.points:
 			state.QuotaPoints = quota.value
 			dbComms.saveQuota <- quota.value

@@ -223,7 +223,13 @@ func startServer(startup Startup) {
 	cfg := Config{}
 	comms := Comms{}
 	dbComms := DbComms{}
-	serverState := ServerState{Credentials: credentials, Quotes: quotes, QuotaPoints: 10000, Seen: seen}
+	serverState := ServerState{
+		Credentials: credentials,
+		Quotes:      quotes,
+		QuotaPoints: 10000,
+		Seen:        seen,
+		LogHistory:  make([]Log, 0, MaxLogHistory),
+	}
 
 	initComms(&comms, &dbComms)
 
