@@ -131,10 +131,10 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 		case params := <-comms.saveComment:
 			saved, err := queries.CreateComment(ctx, params)
 			if err != nil {
-				logs <- Log{Err: err}
+				logs <- Log{Scope: "db", Msg: "Failed to save comment", Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Posted comment -> %s", saved.ID)}
+			logs <- Log{Scope: "db", Msg: fmt.Sprintf("Saved comment -> %s", saved.ID)}
 
 		case wisdom := <-comms.wisdom:
 			quote, err := queries.CreateQuote(ctx, wisdom.epiphany)
@@ -203,26 +203,26 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 			_, err := queries.SaveUsage(ctx, params)
 
 			if err != nil {
-				logs <- Log{Err: err}
+				logs <- Log{Scope: "db", Msg: "Failed to save quote usage", Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Saved usage -> channel: %s | quote: %d", usage.channelId, usage.quoteId)}
+			logs <- Log{Scope: "db", Msg: fmt.Sprintf("Marked quote %d used by %s", usage.quoteId, usage.channelId)}
 
 		case quota := <-comms.saveQuota:
 			n, err := queries.UpdateQuota(ctx, int64(quota))
 			if err != nil {
-				logs <- Log{Err: err}
+				logs <- Log{Scope: "db", Msg: "Failed to persist quota", Err: err}
 				continue
 			}
-			logs <- Log{Msg: fmt.Sprintf("Updated Quota -> %d", n.Quota)}
+			logs <- Log{Scope: "db", Msg: fmt.Sprintf("Quota now %d", n.Quota)}
 
 		case <-comms.resetQuota:
 			_, err := queries.RefreshQuota(ctx)
 			if err != nil {
-				logs <- Log{Err: err}
+				logs <- Log{Scope: "db", Msg: "Failed to reset quota", Err: err}
 				continue
 			}
-			logs <- Log{Msg: "Reset quota"}
+			logs <- Log{Scope: "db", Msg: "Quota reset"}
 
 		case freq := <-comms.updateFreq:
 			_, err := queries.UpdateChannelFreq(ctx, freq.params)

@@ -16,7 +16,7 @@ func saveProgress(replies []WiseReply, dbComms *DbComms, logs chan<- Log, seen c
 		seen <- id
 		err := simpleMan(id, dbComms.saveVid)
 		if err != nil {
-			logs <- Log{Err: err}
+			logs <- Log{Scope: "db", Msg: fmt.Sprintf("Failed to record video %s", id), Err: err}
 			continue
 		}
 		msg += fmt.Sprintf("%s | ", id)
@@ -92,12 +92,12 @@ func storeLikes(stats []UpdatedStats, logs chan<- Log, table string) {
 		}
 
 		if err != nil {
-			logs <- Log{Err: err}
+			logs <- Log{Scope: "stats", Msg: fmt.Sprintf("Failed to update likes in %s", table), Err: err}
 			continue
 		}
 		c++
 	}
-	logs <- Log{Msg: fmt.Sprintf("Updated %d likes for %s", c, table)}
+	logs <- Log{Scope: "stats", Msg: fmt.Sprintf("Updated %d likes in %s", c, table)}
 }
 
 func unique_vids(replies []WiseReply) []string {

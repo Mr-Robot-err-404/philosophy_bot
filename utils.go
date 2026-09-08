@@ -10,20 +10,11 @@ import (
 const COMMENT_COST = 50
 
 type JsonLog struct {
-	Msg string `json:"msg,omitempty"`
-	Err string `json:"err,omitempty"`
-	Ts  string `json:"time"`
-}
-
-func printLog(log Log) {
-	if log.Err != nil {
-		fmt.Println(log.Err)
-		return
-	}
-	if len(log.Msg) == 0 {
-		return
-	}
-	fmt.Println(log.Msg)
+	Msg   string `json:"msg,omitempty"`
+	Err   string `json:"err,omitempty"`
+	Level string `json:"level"`
+	Scope string `json:"scope,omitempty"`
+	Ts    string `json:"time"`
 }
 
 func seenMap(vids []string) map[string]bool {
@@ -47,12 +38,16 @@ func JsonLogs(logs []Log) []JsonLog {
 	slice := make([]JsonLog, len(logs))
 
 	for i, log := range logs {
-		ts := log.Ts.Format(time.RFC1123)
-		if log.Err != nil {
-			slice[i] = JsonLog{Err: log.Err.Error(), Ts: ts}
-			continue
+		entry := JsonLog{
+			Msg:   log.Msg,
+			Level: levelName(log.level()),
+			Scope: log.Scope,
+			Ts:    log.Ts.Format(time.RFC1123),
 		}
-		slice[i] = JsonLog{Msg: log.Msg, Ts: ts}
+		if log.Err != nil {
+			entry.Err = log.Err.Error()
+		}
+		slice[i] = entry
 	}
 	return slice
 }

@@ -282,7 +282,13 @@ func startServer(startup Startup) {
 	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
 	defer unsubscribeChannels(callback, credentials.bearer)
 
-	comms.logs <- Log{Msg: fmt.Sprintf("APP URL -> %s", listener.URL())}
+	printBanner([]string{
+		"philosophy bot",
+		fmt.Sprintf("quotes %d | channels %d | seen %d", len(quotes), len(channels), len(seen)),
+		fmt.Sprintf("quota %d | local %s", serverState.QuotaPoints, startup.addr),
+		listener.URL(),
+	})
+	comms.logs <- Log{Scope: "http", Msg: fmt.Sprintf("Public callback -> %s", callback)}
 
 	local := &http.Server{
 		Addr:         startup.addr,
@@ -292,10 +298,10 @@ func startServer(startup Startup) {
 		IdleTimeout:  60 * time.Second,
 	}
 	go func() {
-		comms.logs <- Log{Msg: fmt.Sprintf("Listening locally -> %s", startup.addr)}
+		comms.logs <- Log{Scope: "http", Msg: fmt.Sprintf("Listening locally -> %s", startup.addr)}
 
 		if err := local.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			comms.logs <- Log{Err: fmt.Errorf("local listener: %w", err)}
+			comms.logs <- Log{Scope: "http", Msg: "Local listener stopped", Err: err}
 		}
 	}()
 

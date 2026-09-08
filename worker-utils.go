@@ -141,9 +141,9 @@ func subscribeToChannels(channels []database.Channel, callback string, bearer st
 	for _, channel := range channels {
 		err := server.PostPubSub(channel.ID, Subscribe, callback, bearer)
 		if err != nil {
-			ch <- Log{Err: err}
+			ch <- Log{Scope: "hub", Msg: fmt.Sprintf("Failed to subscribe to %s", channel.Handle), Err: err}
 			continue
 		}
-		ch <- Log{Msg: fmt.Sprintf("Subscribed to %s", channel.ID)}
+		ch <- Log{Scope: "hub", Msg: fmt.Sprintf("Subscribed to %s", channel.Handle)}
 	}
 }
