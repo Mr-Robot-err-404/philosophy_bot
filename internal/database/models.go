@@ -71,6 +71,7 @@ type Task struct {
 	Error       sql.NullString
 	CreatedAt   time.Time
 	ActiveAt    time.Time
+	ClaimedAt   sql.NullTime
 	CompletedAt sql.NullTime
 }
 

@@ -35,32 +35,32 @@ WHERE video_id = ?;
 
 -- name: ClaimTask :one
 UPDATE tasks
-SET status = 'running', attempts = attempts + 1
+SET status = 'running', attempts = attempts + 1, claimed_at = datetime('now')
 WHERE id = ? AND status = 'pending'
 RETURNING *;
 
 -- name: CompleteTask :one
 UPDATE tasks
-SET status = 'done', comment_id = ?, completed_at = datetime('now'), error = NULL
+SET status = 'done', comment_id = ?, completed_at = datetime('now'), error = NULL, claimed_at = NULL
 WHERE id = ?
 RETURNING *;
 
 -- name: FailTask :one
 UPDATE tasks
-SET status = 'failed', error = ?, completed_at = datetime('now')
+SET status = 'failed', error = ?, completed_at = datetime('now'), claimed_at = NULL
 WHERE id = ?
 RETURNING *;
 
 -- name: RetryTask :one
 UPDATE tasks
-SET status = 'pending', error = ?, active_at = ?
+SET status = 'pending', error = ?, active_at = ?, claimed_at = NULL
 WHERE id = ?
 RETURNING *;
 
 -- name: ReleaseStaleTasks :many
 UPDATE tasks
-SET status = 'pending'
-WHERE status = 'running' AND active_at <= ?
+SET status = 'pending', claimed_at = NULL
+WHERE status = 'running' AND (claimed_at IS NULL OR claimed_at <= ?)
 RETURNING *;
 
 -- name: CountTasksByStatus :many
@@ -77,3 +77,8 @@ WHERE status IN ('pending', 'running');
 DELETE FROM tasks
 WHERE status IN ('done', 'failed') AND completed_at < ?
 RETURNING *;
+
+-- name: GetRunningTasks :many
+SELECT * FROM tasks
+WHERE status = 'running'
+ORDER BY claimed_at;

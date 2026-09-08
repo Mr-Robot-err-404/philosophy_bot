@@ -13,9 +13,9 @@ import (
 
 const claimTask = `-- name: ClaimTask :one
 UPDATE tasks
-SET status = 'running', attempts = attempts + 1
+SET status = 'running', attempts = attempts + 1, claimed_at = datetime('now')
 WHERE id = ? AND status = 'pending'
-RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at
+RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at
 `
 
 func (q *Queries) ClaimTask(ctx context.Context, id string) (Task, error) {
@@ -33,6 +33,7 @@ func (q *Queries) ClaimTask(ctx context.Context, id string) (Task, error) {
 		&i.Error,
 		&i.CreatedAt,
 		&i.ActiveAt,
+		&i.ClaimedAt,
 		&i.CompletedAt,
 	)
 	return i, err
@@ -40,9 +41,9 @@ func (q *Queries) ClaimTask(ctx context.Context, id string) (Task, error) {
 
 const completeTask = `-- name: CompleteTask :one
 UPDATE tasks
-SET status = 'done', comment_id = ?, completed_at = datetime('now'), error = NULL
+SET status = 'done', comment_id = ?, completed_at = datetime('now'), error = NULL, claimed_at = NULL
 WHERE id = ?
-RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at
+RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at
 `
 
 type CompleteTaskParams struct {
@@ -65,6 +66,7 @@ func (q *Queries) CompleteTask(ctx context.Context, arg CompleteTaskParams) (Tas
 		&i.Error,
 		&i.CreatedAt,
 		&i.ActiveAt,
+		&i.ClaimedAt,
 		&i.CompletedAt,
 	)
 	return i, err
@@ -116,7 +118,7 @@ VALUES (
 	datetime('now'),
 	?
 )
-RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at
+RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at
 `
 
 type CreateTaskParams struct {
@@ -150,6 +152,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Error,
 		&i.CreatedAt,
 		&i.ActiveAt,
+		&i.ClaimedAt,
 		&i.CompletedAt,
 	)
 	return i, err
@@ -158,7 +161,7 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 const deleteOldTasks = `-- name: DeleteOldTasks :many
 DELETE FROM tasks
 WHERE status IN ('done', 'failed') AND completed_at < ?
-RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at
+RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at
 `
 
 func (q *Queries) DeleteOldTasks(ctx context.Context, completedAt sql.NullTime) ([]Task, error) {
@@ -182,6 +185,7 @@ func (q *Queries) DeleteOldTasks(ctx context.Context, completedAt sql.NullTime) 
 			&i.Error,
 			&i.CreatedAt,
 			&i.ActiveAt,
+			&i.ClaimedAt,
 			&i.CompletedAt,
 		); err != nil {
 			return nil, err
@@ -199,9 +203,9 @@ func (q *Queries) DeleteOldTasks(ctx context.Context, completedAt sql.NullTime) 
 
 const failTask = `-- name: FailTask :one
 UPDATE tasks
-SET status = 'failed', error = ?, completed_at = datetime('now')
+SET status = 'failed', error = ?, completed_at = datetime('now'), claimed_at = NULL
 WHERE id = ?
-RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at
+RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at
 `
 
 type FailTaskParams struct {
@@ -224,13 +228,14 @@ func (q *Queries) FailTask(ctx context.Context, arg FailTaskParams) (Task, error
 		&i.Error,
 		&i.CreatedAt,
 		&i.ActiveAt,
+		&i.ClaimedAt,
 		&i.CompletedAt,
 	)
 	return i, err
 }
 
 const findTaskByVideo = `-- name: FindTaskByVideo :one
-SELECT id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at FROM tasks
+SELECT id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at FROM tasks
 WHERE video_id = ?
 `
 
@@ -249,13 +254,14 @@ func (q *Queries) FindTaskByVideo(ctx context.Context, videoID string) (Task, er
 		&i.Error,
 		&i.CreatedAt,
 		&i.ActiveAt,
+		&i.ClaimedAt,
 		&i.CompletedAt,
 	)
 	return i, err
 }
 
 const getDueTasks = `-- name: GetDueTasks :many
-SELECT id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at FROM tasks
+SELECT id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at FROM tasks
 WHERE status = 'pending' AND active_at <= datetime('now')
 ORDER BY active_at
 LIMIT ?
@@ -282,6 +288,7 @@ func (q *Queries) GetDueTasks(ctx context.Context, limit int64) ([]Task, error) 
 			&i.Error,
 			&i.CreatedAt,
 			&i.ActiveAt,
+			&i.ClaimedAt,
 			&i.CompletedAt,
 		); err != nil {
 			return nil, err
@@ -298,7 +305,7 @@ func (q *Queries) GetDueTasks(ctx context.Context, limit int64) ([]Task, error) 
 }
 
 const getPendingTasks = `-- name: GetPendingTasks :many
-SELECT id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at FROM tasks
+SELECT id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at FROM tasks
 WHERE status = 'pending'
 ORDER BY active_at
 `
@@ -324,6 +331,7 @@ func (q *Queries) GetPendingTasks(ctx context.Context) ([]Task, error) {
 			&i.Error,
 			&i.CreatedAt,
 			&i.ActiveAt,
+			&i.ClaimedAt,
 			&i.CompletedAt,
 		); err != nil {
 			return nil, err
@@ -340,7 +348,7 @@ func (q *Queries) GetPendingTasks(ctx context.Context) ([]Task, error) {
 }
 
 const getRecentTasks = `-- name: GetRecentTasks :many
-SELECT tasks.id, tasks.video_id, tasks.channel_id, tasks.quote_id, tasks.status, tasks.attempts, tasks.quota_cost, tasks.comment_id, tasks.error, tasks.created_at, tasks.active_at, tasks.completed_at, cornucopia.quote, cornucopia.author
+SELECT tasks.id, tasks.video_id, tasks.channel_id, tasks.quote_id, tasks.status, tasks.attempts, tasks.quota_cost, tasks.comment_id, tasks.error, tasks.created_at, tasks.active_at, tasks.claimed_at, tasks.completed_at, cornucopia.quote, cornucopia.author
 FROM tasks LEFT JOIN cornucopia ON tasks.quote_id = cornucopia.id
 ORDER BY tasks.created_at DESC
 LIMIT ?
@@ -358,6 +366,7 @@ type GetRecentTasksRow struct {
 	Error       sql.NullString
 	CreatedAt   time.Time
 	ActiveAt    time.Time
+	ClaimedAt   sql.NullTime
 	CompletedAt sql.NullTime
 	Quote       sql.NullString
 	Author      sql.NullString
@@ -384,6 +393,7 @@ func (q *Queries) GetRecentTasks(ctx context.Context, limit int64) ([]GetRecentT
 			&i.Error,
 			&i.CreatedAt,
 			&i.ActiveAt,
+			&i.ClaimedAt,
 			&i.CompletedAt,
 			&i.Quote,
 			&i.Author,
@@ -401,15 +411,14 @@ func (q *Queries) GetRecentTasks(ctx context.Context, limit int64) ([]GetRecentT
 	return items, nil
 }
 
-const releaseStaleTasks = `-- name: ReleaseStaleTasks :many
-UPDATE tasks
-SET status = 'pending'
-WHERE status = 'running' AND active_at <= ?
-RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at
+const getRunningTasks = `-- name: GetRunningTasks :many
+SELECT id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at FROM tasks
+WHERE status = 'running'
+ORDER BY claimed_at
 `
 
-func (q *Queries) ReleaseStaleTasks(ctx context.Context, activeAt time.Time) ([]Task, error) {
-	rows, err := q.db.QueryContext(ctx, releaseStaleTasks, activeAt)
+func (q *Queries) GetRunningTasks(ctx context.Context) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, getRunningTasks)
 	if err != nil {
 		return nil, err
 	}
@@ -429,6 +438,51 @@ func (q *Queries) ReleaseStaleTasks(ctx context.Context, activeAt time.Time) ([]
 			&i.Error,
 			&i.CreatedAt,
 			&i.ActiveAt,
+			&i.ClaimedAt,
+			&i.CompletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const releaseStaleTasks = `-- name: ReleaseStaleTasks :many
+UPDATE tasks
+SET status = 'pending', claimed_at = NULL
+WHERE status = 'running' AND (claimed_at IS NULL OR claimed_at <= ?)
+RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at
+`
+
+func (q *Queries) ReleaseStaleTasks(ctx context.Context, claimedAt sql.NullTime) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, releaseStaleTasks, claimedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.VideoID,
+			&i.ChannelID,
+			&i.QuoteID,
+			&i.Status,
+			&i.Attempts,
+			&i.QuotaCost,
+			&i.CommentID,
+			&i.Error,
+			&i.CreatedAt,
+			&i.ActiveAt,
+			&i.ClaimedAt,
 			&i.CompletedAt,
 		); err != nil {
 			return nil, err
@@ -446,9 +500,9 @@ func (q *Queries) ReleaseStaleTasks(ctx context.Context, activeAt time.Time) ([]
 
 const retryTask = `-- name: RetryTask :one
 UPDATE tasks
-SET status = 'pending', error = ?, active_at = ?
+SET status = 'pending', error = ?, active_at = ?, claimed_at = NULL
 WHERE id = ?
-RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, completed_at
+RETURNING id, video_id, channel_id, quote_id, status, attempts, quota_cost, comment_id, error, created_at, active_at, claimed_at, completed_at
 `
 
 type RetryTaskParams struct {
@@ -472,6 +526,7 @@ func (q *Queries) RetryTask(ctx context.Context, arg RetryTaskParams) (Task, err
 		&i.Error,
 		&i.CreatedAt,
 		&i.ActiveAt,
+		&i.ClaimedAt,
 		&i.CompletedAt,
 	)
 	return i, err

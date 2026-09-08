@@ -11,6 +11,7 @@ CREATE TABLE tasks(
 	error TEXT,
 	created_at TIMESTAMP NOT NULL,
 	active_at TIMESTAMP NOT NULL,
+	claimed_at TIMESTAMP,
 	completed_at TIMESTAMP,
 	PRIMARY KEY(id)
 );
