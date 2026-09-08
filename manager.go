@@ -103,6 +103,13 @@ func stateManager(initial ServerState, comms *Comms, dbComms *DbComms) {
 			}
 			copy(state.LogHistory, state.LogHistory[1:])
 			state.LogHistory[MaxLogHistory-1] = log
+		case tick := <-comms.schedule:
+			if tick.every == 0 {
+				state.Schedule[tick.job] = time.Time{}
+				continue
+			}
+			state.Schedule[tick.job] = time.Now().Add(tick.every)
+
 		case quota := <-comms.points:
 			state.QuotaPoints = quota.value
 			dbComms.saveQuota <- quota.value

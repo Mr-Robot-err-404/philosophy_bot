@@ -49,6 +49,28 @@
 </div>
 
 <section class="panel">
+  <h2>next tick {{ if not .BotOnline }}<span class="warn">bot offline</span>{{ end }}</h2>
+  {{ if .BotOnline }}
+  <table class="jobs">
+    <thead><tr><th>job</th><th>every</th><th>next run</th><th>countdown</th></tr></thead>
+    <tbody>
+    {{ range .Jobs }}
+      <tr>
+        <td>{{ .Name }}</td>
+        <td class="meta">{{ .Interval }}s</td>
+        <td class="meta">{{ if .Stopped }}—{{ else }}{{ .NextRun }}{{ end }}</td>
+        <td class="num-cell countdown"
+            {{ if .Stopped }}data-stopped="1"{{ else }}data-remaining="{{ .Remaining }}"{{ end }}>
+          {{ if .Stopped }}<span class="warn">stopped</span>{{ end }}
+        </td>
+      </tr>
+    {{ end }}
+    </tbody>
+  </table>
+  {{ else }}<p class="empty">{{ .BotError }}</p>{{ end }}
+</section>
+
+<section class="panel">
   <h2>activity <span class="meta">last 30 days</span></h2>
   <div class="chart">
     {{ range .Activity }}
@@ -139,5 +161,6 @@
 </section>
 
 </main>
+<script src="/static/countdown.js"></script>
 </body>
 </html>

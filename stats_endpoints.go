@@ -34,6 +34,16 @@ func (cfg *Config) handlerStats(w http.ResponseWriter, req *http.Request) {
 	server.SuccessResp(w, http.StatusOK, payload)
 }
 
+func (cfg *Config) handlerSchedule(w http.ResponseWriter, req *http.Request) {
+	comms := cfg.comms
+	state := readServerState(comms.rd)
+
+	if !checkTkn(req.Header, w, state.Credentials.bearer) {
+		return
+	}
+	server.SuccessResp(w, http.StatusOK, buildJobs(state.Schedule))
+}
+
 func (cfg *Config) logHistoryHandler(w http.ResponseWriter, req *http.Request) {
 	comms := cfg.comms
 	state := readServerState(comms.rd)

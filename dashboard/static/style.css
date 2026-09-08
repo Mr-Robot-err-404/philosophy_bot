@@ -81,3 +81,7 @@ td { padding: 0.5rem 0.6rem 0.5rem 0; border-bottom: 1px solid var(--line); vert
 tr:last-child td { border-bottom: 0; }
 .num-cell { color: #fff; white-space: nowrap; }
 .author { color: var(--dim); margin-left: 0.5rem; }
+
+.jobs td { font-variant-numeric: tabular-nums; }
+.countdown { min-width: 5rem; }
+.countdown.due { color: var(--accent); }

@@ -43,6 +43,7 @@ type ServerState struct {
 	Credentials Credentials
 	Quotes      []database.Cornucopium
 	LogHistory  []Log
+	Schedule    map[string]time.Time
 	QuotaPoints int
 	Seen        map[string]bool
 }
@@ -64,6 +65,7 @@ type Comms struct {
 	refreshTkn  chan WriteToken
 	logs        chan Log
 	points      chan UpdateQuotaPoints
+	schedule    chan ScheduleTick
 }
 type DbComms struct {
 	deleteChannel chan SimpleMan
@@ -233,6 +235,7 @@ func startServer(startup Startup) {
 		QuotaPoints: int(startup.cache.quota.Quota),
 		Seen:        seen,
 		LogHistory:  make([]Log, 0, MaxLogHistory),
+		Schedule:    newSchedule(time.Now()),
 	}
 
 	initComms(&comms, &dbComms)
@@ -254,6 +257,7 @@ func startServer(startup Startup) {
 	mux.HandleFunc("POST /kafka/refresh", cfg.handlerRefreshTkn)
 	mux.HandleFunc("GET /kant/logs", cfg.logHistoryHandler)
 	mux.HandleFunc("GET /kant/points", cfg.QuotaPointsHandler)
+	mux.HandleFunc("GET /kant/schedule", cfg.handlerSchedule)
 	mux.HandleFunc("GET /kant/stats", cfg.handlerStats)
 	mux.HandleFunc("/diogenes/bowl", cfg.handlerDiogenes)
 
@@ -309,6 +313,7 @@ func initComms(comms *Comms, dbComms *DbComms) {
 	comms.writeSeen = make(chan string)
 	comms.logs = make(chan Log)
 	comms.points = make(chan UpdateQuotaPoints)
+	comms.schedule = make(chan ScheduleTick)
 
 	rdComms := DbReadComms{}
 	rdComms.findTag = make(chan FindTag)

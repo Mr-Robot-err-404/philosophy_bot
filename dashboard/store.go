@@ -73,6 +73,9 @@ type Stats struct {
 	TopQuotes   []QuoteUse
 	UnusedPool  int
 	Channels    []Channel
+	Jobs        []Job
+	BotOnline   bool
+	BotError    string
 	Generated   string
 }
 

@@ -79,19 +79,21 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 }
 
 func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) {
-	trending := time.NewTicker(30 * time.Minute)
-	refresh := time.NewTicker(50 * time.Minute)
-	quota := time.NewTicker(25 * time.Hour)
-	statsCron := time.NewTicker(21 * time.Hour)
+	trending := time.NewTicker(TrendingInterval)
+	refresh := time.NewTicker(RefreshInterval)
+	quota := time.NewTicker(QuotaInterval)
+	statsCron := time.NewTicker(StatsInterval)
 
 	alternate := false
 
 	for {
 		select {
 		case <-quota.C:
+			comms.schedule <- ScheduleTick{job: "quota", every: QuotaInterval}
 			comms.points <- UpdateQuotaPoints{value: 10000}
 
 		case <-refresh.C:
+			comms.schedule <- ScheduleTick{job: "refresh", every: RefreshInterval}
 			state := readServerState(comms.rd)
 			access_token, err := refresh_token(state.Credentials.refresh_token)
 
@@ -100,6 +102,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) 
 				comms.logs <- Log{Msg: "Sending email"}
 
 				refresh.Stop()
+				comms.schedule <- ScheduleTick{job: "refresh"}
 
 				if err := email.Send(email_payload); err != nil {
 					comms.logs <- Log{Err: fmt.Errorf("Failed to send email: %v", err)}
@@ -116,6 +119,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) 
 			comms.logs <- Log{Msg: "Updated refresh token"}
 
 		case <-trending.C:
+			comms.schedule <- ScheduleTick{job: "trending", every: TrendingInterval}
 			state := readServerState(comms.rd)
 
 			if state.QuotaPoints < 3250 {
@@ -126,6 +130,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) 
 			saveProgress(wisdom, dbComms, comms.logs, comms.writeSeen)
 
 		case <-statsCron.C:
+			comms.schedule <- ScheduleTick{job: "stats", every: StatsInterval}
 			state := readServerState(comms.rd)
 			minimum, width := statsQuota(alternate, 1250)
 
