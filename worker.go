@@ -108,6 +108,9 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) 
 				comms.logs <- Log{Msg: "Email sent"}
 				continue
 			}
+			if err := renewAccessToken(access_token); err != nil {
+				comms.logs <- Log{Err: err}
+			}
 			update := WriteToken{token: access_token, resp: make(chan bool)}
 			comms.writeTkn <- update
 			comms.logs <- Log{Msg: "Updated refresh token"}

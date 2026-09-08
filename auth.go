@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/joho/godotenv"
 	"github.com/pkg/browser"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -21,9 +20,15 @@ func authenticate_account() error {
 		return err
 	}
 	access, refresh_token := requestCredentials(config)
+
+	if refresh_token == "" {
+		return fmt.Errorf("google returned no refresh token, revoke access at https://myaccount.google.com/permissions and retry")
+	}
+	if err := saveTokens(Tokens{AccessToken: access, RefreshToken: refresh_token}); err != nil {
+		return err
+	}
 	printBreak()
-	fmt.Println("access token -> ", access)
-	fmt.Println("refresh token -> ", refresh_token)
+	fmt.Printf("saved tokens -> %s\n", tokensPath())
 	printBreak()
 
 	return nil
@@ -59,22 +64,6 @@ func handleOauthCallback(ch chan<- string) func(w http.ResponseWriter, r *http.R
 		w.WriteHeader(http.StatusOK)
 		w.Write(html)
 	}
-}
-
-func saveCredentials(token *oauth2.Token) error {
-	env, err := getEnvMap()
-	if err != nil {
-		env = make(map[string]string)
-	}
-	env["ACCESS_TOKEN"] = token.AccessToken
-	env["REFRESH_TOKEN"] = token.RefreshToken
-
-	err = godotenv.Write(env, "./.env")
-	if err != nil {
-		return err
-	}
-	return nil
-
 }
 
 func requestCredentials(config *oauth2.Config) (string, string) {
@@ -123,9 +112,23 @@ func requestCredentials(config *oauth2.Config) (string, string) {
 }
 
 func getCredentials() Credentials {
-	access_token := os.Getenv("ACCESS_TOKEN")
-	refresh_token := os.Getenv("REFRESH_TOKEN")
 	key := os.Getenv("QUOTE_API_KEY")
 	bearer := os.Getenv("BEARER")
-	return Credentials{key: key, access_token: access_token, bearer: bearer, refresh_token: refresh_token}
+
+	tokens, err := loadTokens()
+	if err != nil {
+		if !os.IsNotExist(err) {
+			log.Fatal(err)
+		}
+		tokens = Tokens{AccessToken: os.Getenv("ACCESS_TOKEN"), RefreshToken: os.Getenv("REFRESH_TOKEN")}
+
+		if tokens.RefreshToken == "" {
+			log.Fatalf("no tokens at %q and no REFRESH_TOKEN in env, run: ./bot -refresh", tokensPath())
+		}
+		if err := saveTokens(tokens); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("migrated tokens from env -> %s\n", tokensPath())
+	}
+	return Credentials{key: key, access_token: tokens.AccessToken, bearer: bearer, refresh_token: tokens.RefreshToken}
 }

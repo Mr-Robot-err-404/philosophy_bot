@@ -5,4 +5,5 @@ bot
 .env
 app.db
 client_secret.json
+tokens.json
 AGENTS.md

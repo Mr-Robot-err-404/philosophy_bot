@@ -19,6 +19,10 @@ func (cfg *Config) handlerRefreshTkn(w http.ResponseWriter, req *http.Request) {
 		server.ErrorResp(w, 400, "Invalid token length")
 		return
 	}
+	if err := saveRefreshToken(tkn); err != nil {
+		server.ErrorResp(w, http.StatusInternalServerError, "Failed to persist refresh token")
+		return
+	}
 	comms.refreshTkn <- WriteToken{token: tkn}
 	server.SuccessResp(w, 202, "Updated refresh token")
 }
