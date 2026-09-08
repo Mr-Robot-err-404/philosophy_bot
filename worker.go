@@ -95,7 +95,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 
 			if err != nil {
 				comms.logs <- Log{Err: err}
-				return
+				continue
 			}
 			update := WriteAccessToken{access_token: access_token, resp: make(chan bool)}
 			comms.writeTkn <- update
@@ -106,7 +106,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 
 			if state.QuotaPoints < 3250 {
 				comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota points for trending cron -> %d", state.QuotaPoints)}
-				return
+				continue
 			}
 			wisdom := enlightenTrendingPage(comms, state)
 			saveProgress(wisdom, dbComms, comms.logs, comms.writeSeen)
@@ -118,7 +118,7 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 			if state.QuotaPoints < minimum {
 				comms.logs <- Log{Msg: fmt.Sprintf("Insufficient quota for stats cron -> %d", state.QuotaPoints)}
 				toggle(&alternate)
-				return
+				continue
 			}
 			info := StatsCall{key: state.Credentials.key, logs: comms.logs, width: width}
 			stats(dbComms, &alternate, info)
