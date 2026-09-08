@@ -67,6 +67,15 @@ func getEmailPayload() email.Payload {
 	return email.Payload{Username: username, Pwd: pwd, To: to, Msg: msg, Subject: subject}
 }
 
+func getEmailPayload() email.Payload {
+	username := os.Getenv("EMAIL_USERNAME")
+	pwd := os.Getenv("EMAIL_PWD")
+	to := os.Getenv("EMAIL_TO")
+	msg := "Philosophy Bot may need a new refresh token boss"
+	subject := "Beep Bop, I'm tired boss..."
+	return email.Payload{Username: username, Pwd: pwd, To: to, Msg: msg, Subject: subject}
+}
+
 func generateQuotaTable(id string) error {
 	_, err := queries.SetupQuota(ctx, id)
 	if err != nil {
