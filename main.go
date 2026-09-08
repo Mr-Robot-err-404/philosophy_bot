@@ -13,50 +13,107 @@ const PostComment = "https://www.googleapis.com/youtube/v3/comments?part=snippet
 
 var RegionCodes = [10]string{"GB", "AU", "US", "IE", "NL", "SE", "NO", "DK", "NZ", "ZA"}
 
+func usage() {
+	fmt.Fprint(os.Stderr, `philosophy bot
+
+usage:
+  bot <command> [flags]
+
+commands:
+  server     run the webhook server and cron jobs
+  socrates   post to trending videos once, then exit
+  refresh    authorise with google and save tokens
+  stats      sync like counts for existing comments
+  help       show this message
+
+run "bot <command> -h" for command flags
+`)
+}
+
 func main() {
-	cmd := flag.NewFlagSet("cmd", flag.ExitOnError)
-	dev_mode := cmd.Bool("dev", false, "dev")
-	refresh := cmd.Bool("refresh", false, "refresh")
-	start_server := cmd.Bool("server", false, "server")
-	stats_mode := cmd.Bool("stats", false, "stats")
-	philosophy_mode := cmd.Bool("socrates", false, "socrates")
-
-	cmd.Parse(os.Args[1:])
-
-	if *dev_mode {
-		return
+	if len(os.Args) < 2 {
+		usage()
+		os.Exit(2)
 	}
-	sisyphus()
-	if *refresh {
-		err := authenticate_account()
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println("Done")
-		return
+	args := os.Args[2:]
+
+	switch os.Args[1] {
+	case "server":
+		runServer(args)
+	case "socrates":
+		runSocrates(args)
+	case "refresh":
+		runRefresh(args)
+	case "stats":
+		runStats(args)
+	case "help", "-h", "--help":
+		usage()
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", os.Args[1])
+		usage()
+		os.Exit(2)
 	}
+}
+
+func loadCache() (Credentials, TableCache) {
 	credentials := getCredentials()
 
 	cache, err := getTableCache(&credentials)
 	if err != nil {
 		log.Fatal(err)
 	}
-	if *start_server {
-		config, err := extractGoogleConfig("client_secret.json")
-		if err != nil {
-			log.Fatal("Failed to extract google config")
-		}
-		email_payload := getEmailPayload()
-		startup := Startup{credentials: credentials, quotes: cache.quotes, channels: cache.channels, seen: seenMap(cache.videos), likes: makeLikeMap(cache.replies), google_config: config, email_payload: email_payload, cache: cache}
-		startServer(startup)
-		return
+	return credentials, cache
+}
+
+func runRefresh(args []string) {
+	fs := flag.NewFlagSet("refresh", flag.ExitOnError)
+	fs.Parse(args)
+
+	sisyphus()
+
+	if err := authenticate_account(); err != nil {
+		log.Fatal(err)
 	}
-	if *stats_mode {
-		// stats(cache, credentials.key)
-		return
+}
+
+func runServer(args []string) {
+	fs := flag.NewFlagSet("server", flag.ExitOnError)
+	fs.Parse(args)
+
+	sisyphus()
+	credentials, cache := loadCache()
+
+	config, err := extractGoogleConfig("client_secret.json")
+	if err != nil {
+		log.Fatal("Failed to extract google config")
 	}
-	if !*philosophy_mode {
-		log.Fatal("Diogenes lost his bowl")
+	startup := Startup{
+		credentials:   credentials,
+		quotes:        cache.quotes,
+		channels:      cache.channels,
+		seen:          seenMap(cache.videos),
+		likes:         makeLikeMap(cache.replies),
+		google_config: config,
+		email_payload: getEmailPayload(),
+		cache:         cache,
 	}
+	startServer(startup)
+}
+
+func runSocrates(args []string) {
+	fs := flag.NewFlagSet("socrates", flag.ExitOnError)
+	fs.Parse(args)
+
+	sisyphus()
+	credentials, cache := loadCache()
 	exploreTrending(cache, credentials)
+}
+
+func runStats(args []string) {
+	fs := flag.NewFlagSet("stats", flag.ExitOnError)
+	fs.Parse(args)
+
+	sisyphus()
+	loadCache()
+	log.Fatal("stats is not wired up for cli use yet, it runs on the server cron")
 }

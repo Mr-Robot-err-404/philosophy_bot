@@ -85,7 +85,7 @@ func requestCredentials(config *oauth2.Config) (string, string) {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
-	url := config.AuthCodeURL("state", oauth2.AccessTypeOffline)
+	url := config.AuthCodeURL("state", oauth2.AccessTypeOffline, oauth2.ApprovalForce)
 
 	fmt.Printf("Your browser has been opened to visit::\n%s\n", url)
 
