@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bot/philosophy/email"
 	"bot/philosophy/internal/auth"
 	"bot/philosophy/internal/database"
 	"bot/philosophy/internal/server"
@@ -14,21 +15,26 @@ import (
 	"github.com/google/uuid"
 	"golang.ngrok.com/ngrok"
 	"golang.ngrok.com/ngrok/config"
+	"golang.org/x/oauth2"
 )
 
 type Startup struct {
-	credentials Credentials
-	quotes      []database.Cornucopium
-	channels    []database.Channel
-	seen        map[string]bool
-	likes       map[string]int
-	cache       TableCache
+	credentials   Credentials
+	quotes        []database.Cornucopium
+	channels      []database.Channel
+	seen          map[string]bool
+	likes         map[string]int
+	cache         TableCache
+	google_config *oauth2.Config
+	email_payload email.Payload
 }
 
 type Config struct {
 	jobs    chan Worker
 	comms   Comms
 	dbComms DbComms
+	oauth   *oauth2.Config
+	email   email.Payload
 }
 
 type ServerState struct {
@@ -51,8 +57,9 @@ type FreqPayload struct {
 type Comms struct {
 	rd          chan ReadReq
 	writeWisdom chan WriteQuote
-	writeTkn    chan WriteAccessToken
 	writeSeen   chan string
+	writeTkn    chan WriteToken
+	refreshTkn  chan WriteToken
 	logs        chan Log
 	points      chan UpdateQuotaPoints
 }
@@ -114,17 +121,12 @@ type Usage struct {
 }
 
 // TODO:
-// send an email when refresh token expires
-// create endpoint to update refresh token
 // create binary
+// host on raspberry pi
 
 // HACK:
 // "no u" channel owner listener
 // user interactions
-
-// TEST: -> endpoints
-// update channel freq
-// delete channel
 
 const Subscribe = "subscribe"
 const Unsubscribe = "unsubscribe"
@@ -237,17 +239,20 @@ func startServer(startup Startup) {
 	cfg.jobs = make(chan Worker)
 	cfg.comms = comms
 	cfg.dbComms = dbComms
+	cfg.email = startup.email_payload
+	cfg.oauth = startup.google_config
 
 	fileHnd := appHandler("/app/", http.FileServer(http.Dir(".")))
 	mux.Handle("/app/", fileHnd)
 
-	mux.HandleFunc("POST /philosophy/channels", cfg.handlerCreateChannel)
-	mux.HandleFunc("DELETE /philosophy/channels", cfg.handlerDeleteChannel)
-	mux.HandleFunc("UPDATE /philosophy/channels", cfg.handlerUpdateFrequency)
-	mux.HandleFunc("POST /philosophy/quotes", cfg.handlerCreateQuote)
-	mux.HandleFunc("GET /philosophy/logs", cfg.logHistoryHandler)
-	mux.HandleFunc("GET /philosophy/points", cfg.QuotaPointsHandler)
-	mux.HandleFunc("GET /philosophy/stats", cfg.handlerStats)
+	mux.HandleFunc("POST /socrates/channels", cfg.handlerCreateChannel)
+	mux.HandleFunc("DELETE /socrates/channels", cfg.handlerDeleteChannel)
+	mux.HandleFunc("UPDATE /socrates/channels", cfg.handlerUpdateFrequency)
+	mux.HandleFunc("POST /kafka/quotes", cfg.handlerCreateQuote)
+	mux.HandleFunc("POST /kafka/refresh", cfg.handlerRefreshTkn)
+	mux.HandleFunc("GET /kant/logs", cfg.logHistoryHandler)
+	mux.HandleFunc("GET /kant/points", cfg.QuotaPointsHandler)
+	mux.HandleFunc("GET /kant/stats", cfg.handlerStats)
 	mux.HandleFunc("/diogenes/bowl", cfg.handlerDiogenes)
 
 	listener, err := ngrok.Listen(ctx,
@@ -265,7 +270,7 @@ func startServer(startup Startup) {
 	go receiveJobs(cfg.jobs, results, &cfg.comms, &dbComms)
 	go receiveTaskResults(results, cfg.comms.logs, &dbComms)
 
-	go serverCronJob(&cfg.comms, &cfg.dbComms)
+	go serverCronJob(&cfg.comms, &cfg.dbComms, cfg.email)
 	go renewSubscription(cfg.comms.logs, callback, credentials.bearer, &cfg.dbComms)
 
 	subscribeToChannels(channels, callback, credentials.bearer, cfg.comms.logs)
@@ -282,7 +287,8 @@ func startServer(startup Startup) {
 func initComms(comms *Comms, dbComms *DbComms) {
 	comms.rd = make(chan ReadReq)
 	comms.writeWisdom = make(chan WriteQuote)
-	comms.writeTkn = make(chan WriteAccessToken)
+	comms.writeTkn = make(chan WriteToken)
+	comms.refreshTkn = make(chan WriteToken)
 	comms.writeSeen = make(chan string)
 	comms.logs = make(chan Log)
 	comms.points = make(chan UpdateQuotaPoints)

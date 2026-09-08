@@ -61,7 +61,7 @@ func makeSummary(summary Summary) string {
 
 func printSummary(summary Summary) {
 	printBreak()
-	fmt.Printf("%s in: %v", summary.title, summary.dur)
+	fmt.Printf("%s in: %v\n", summary.title, summary.dur)
 	if summary.end {
 		printBreak()
 	}

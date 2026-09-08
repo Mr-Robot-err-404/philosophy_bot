@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 )
 
 const CommentThread = "https://www.googleapis.com/youtube/v3/commentThreads?part=snippet"
@@ -17,6 +16,7 @@ var RegionCodes = [10]string{"GB", "AU", "US", "IE", "NL", "SE", "NO", "DK", "NZ
 func main() {
 	cmd := flag.NewFlagSet("cmd", flag.ExitOnError)
 	dev_mode := cmd.Bool("dev", false, "dev")
+	refresh := cmd.Bool("refresh", false, "refresh")
 	start_server := cmd.Bool("server", false, "server")
 	stats_mode := cmd.Bool("stats", false, "stats")
 	philosophy_mode := cmd.Bool("socrates", false, "socrates")
@@ -24,28 +24,30 @@ func main() {
 	cmd.Parse(os.Args[1:])
 
 	if *dev_mode {
-		sisyphus()
-		diff := time.Now().Unix() - int64(1*Month)
-		ts := time.Unix(diff, 0)
-		resp, err := queries.GetValidReplies(ctx, ts)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, item := range resp {
-			fmt.Println(item.CreatedAt.Format(time.RFC1123))
-		}
 		return
 	}
 	sisyphus()
+	if *refresh {
+		err := authenticate_account()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("Done")
+		return
+	}
 	credentials := getCredentials()
 
-	cache, err := getTableCache(&credentials.access_token)
+	cache, err := getTableCache(&credentials)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if *start_server {
-		startup := Startup{credentials: credentials, quotes: cache.quotes, channels: cache.channels, seen: seenMap(cache.videos), likes: makeLikeMap(cache.replies)}
+		config, err := extractGoogleConfig("client_secret.json")
+		if err != nil {
+			log.Fatal("Failed to extract google config")
+		}
+		email_payload := getEmailPayload()
+		startup := Startup{credentials: credentials, quotes: cache.quotes, channels: cache.channels, seen: seenMap(cache.videos), likes: makeLikeMap(cache.replies), google_config: config, email_payload: email_payload}
 		startServer(startup)
 		return
 	}

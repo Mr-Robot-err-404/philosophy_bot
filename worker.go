@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bot/philosophy/email"
 	"bot/philosophy/internal/database"
 	"bot/philosophy/internal/helper"
 	"fmt"
@@ -21,9 +22,9 @@ type TaskResult struct {
 type ReadReq struct {
 	resp chan ServerState
 }
-type WriteAccessToken struct {
-	access_token string
-	resp         chan bool
+type WriteToken struct {
+	token string
+	resp  chan bool
 }
 type WriteQuote struct {
 	quote database.Cornucopium
@@ -77,7 +78,7 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 	scheduleJob(payload, cfg.jobs)
 }
 
-func serverCronJob(comms *Comms, dbComms *DbComms) {
+func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) {
 	trending := time.NewTicker(30 * time.Minute)
 	refresh := time.NewTicker(50 * time.Minute)
 	quota := time.NewTicker(25 * time.Hour)
@@ -91,13 +92,22 @@ func serverCronJob(comms *Comms, dbComms *DbComms) {
 			comms.points <- UpdateQuotaPoints{value: 10000}
 
 		case <-refresh.C:
-			access_token, err := refresh_token()
+			state := readServerState(comms.rd)
+			access_token, err := refresh_token(state.Credentials.refresh_token)
 
 			if err != nil {
 				comms.logs <- Log{Err: err}
-				continue
+				comms.logs <- Log{Msg: "Sending email"}
+				err = email.Send(email_payload)
+
+				if err != nil {
+					comms.logs <- Log{Err: fmt.Errorf("Failed to send email: %v", err)}
+					return
+				}
+				comms.logs <- Log{Msg: "Email sent"}
+				return
 			}
-			update := WriteAccessToken{access_token: access_token, resp: make(chan bool)}
+			update := WriteToken{token: access_token, resp: make(chan bool)}
 			comms.writeTkn <- update
 			comms.logs <- Log{Msg: "Updated refresh token"}
 
