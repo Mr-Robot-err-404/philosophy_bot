@@ -47,7 +47,7 @@ func main() {
 			log.Fatal("Failed to extract google config")
 		}
 		email_payload := getEmailPayload()
-		startup := Startup{credentials: credentials, quotes: cache.quotes, channels: cache.channels, seen: seenMap(cache.videos), likes: makeLikeMap(cache.replies), google_config: config, email_payload: email_payload}
+		startup := Startup{credentials: credentials, quotes: cache.quotes, channels: cache.channels, seen: seenMap(cache.videos), likes: makeLikeMap(cache.replies), google_config: config, email_payload: email_payload, cache: cache}
 		startServer(startup)
 		return
 	}

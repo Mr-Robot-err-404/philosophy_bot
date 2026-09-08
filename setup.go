@@ -5,6 +5,7 @@ import (
 	"bot/philosophy/internal/database"
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -18,7 +19,17 @@ var db *sql.DB
 var queries *database.Queries
 var ctx context.Context
 
+func dbPath() string {
+	if path := os.Getenv("DB_PATH"); path != "" {
+		return path
+	}
+	return "./app.db"
+}
+
 func connect_db(db_path string) error {
+	if _, err := os.Stat(db_path); err != nil {
+		return fmt.Errorf("database not found at %q: %w", db_path, err)
+	}
 	var err error
 	db, err = sql.Open("sqlite", db_path)
 	if err != nil {
@@ -34,11 +45,11 @@ func connect_db(db_path string) error {
 }
 
 func sisyphus() {
-	err := connect_db("./app.db")
+	err := godotenv.Load()
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = godotenv.Load()
+	err = connect_db(dbPath())
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -98,14 +98,15 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload) 
 			if err != nil {
 				comms.logs <- Log{Err: err}
 				comms.logs <- Log{Msg: "Sending email"}
-				err = email.Send(email_payload)
 
-				if err != nil {
+				refresh.Stop()
+
+				if err := email.Send(email_payload); err != nil {
 					comms.logs <- Log{Err: fmt.Errorf("Failed to send email: %v", err)}
-					return
+					continue
 				}
 				comms.logs <- Log{Msg: "Email sent"}
-				return
+				continue
 			}
 			update := WriteToken{token: access_token, resp: make(chan bool)}
 			comms.writeTkn <- update
@@ -178,6 +179,10 @@ func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms
 
 		if resp.err != nil {
 			comms.logs <- Log{Err: fmt.Errorf("Task err -> %s", resp.err.Error())}
+			continue
+		}
+		if len(resp.quotes) == 0 {
+			comms.logs <- Log{Msg: fmt.Sprintf("No unused quotes remaining -> channel: %s", channelId)}
 			continue
 		}
 		stack := shuffleStack(resp.quotes)

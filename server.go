@@ -228,7 +228,7 @@ func startServer(startup Startup) {
 	serverState := ServerState{
 		Credentials: credentials,
 		Quotes:      quotes,
-		QuotaPoints: 10000,
+		QuotaPoints: int(startup.cache.quota.Quota),
 		Seen:        seen,
 		LogHistory:  make([]Log, 0, MaxLogHistory),
 	}

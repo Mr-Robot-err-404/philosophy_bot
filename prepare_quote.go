@@ -6,6 +6,10 @@ func prepareComments(ranked []RankedItem, stack []database.Cornucopium, quota in
 	resp := []ReplyInfo{}
 	capacity := (quota / COMMENT_COST) - 1
 
+	if len(stack) == 0 {
+		return resp
+	}
+
 	for i, comment := range ranked {
 		if len(resp) > capacity {
 			return resp

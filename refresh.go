@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bot/philosophy/internal/database"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -71,12 +72,12 @@ func renewSession(id string, tkn *string, refresh_tkn string) (time.Time, error)
 	return login.LastLogin, nil
 }
 
-func refresh_quota(id string) (time.Time, error) {
+func refresh_quota(id string) (database.Quotum, error) {
 	quota, err := queries.RefreshQuota(ctx)
 	if err != nil {
-		return time.Time{}, err
+		return database.Quotum{}, err
 	}
-	return quota.UpdatedAt, nil
+	return quota, nil
 }
 
 func renewAccessToken(access_token string) error {

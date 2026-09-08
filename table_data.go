@@ -86,13 +86,13 @@ func getTableCache(credentials *Credentials) (TableCache, error) {
 		fmt.Println("refreshed session")
 		login.LastLogin = ts
 	}
-	if q_elapsed > int64(time.Hour*24) {
-		updated, err := refresh_quota(quota.ID)
+	if q_elapsed > int64((24 * time.Hour).Seconds()) {
+		refreshed, err := refresh_quota(quota.ID)
 		if err != nil {
 			return TableCache{}, err
 		}
 		fmt.Println("refreshed quota")
-		quota.UpdatedAt = updated
+		quota = refreshed
 	}
 	cache.channels = channels
 	cache.comments = convertComments(comments)

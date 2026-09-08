@@ -8,7 +8,6 @@ import (
 
 const Month = 30 * 24 * 3600
 
-// MaxLogHistory caps the in-memory log ring held by stateManager.
 const MaxLogHistory = 1000
 
 type rdChannelResp struct {
