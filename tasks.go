@@ -16,6 +16,7 @@ const (
 	TaskMaxAttempts  = 3
 	TaskRetryDelay   = 5 * time.Minute
 	TaskHistory      = 30 * 24 * time.Hour
+	TaskLease        = 10 * time.Minute
 )
 
 type CreateTask struct {
@@ -68,6 +69,10 @@ type PurgeTasks struct {
 	resp   chan DueTasksResp
 }
 
+type RunningTasks struct {
+	resp chan DueTasksResp
+}
+
 type DbTaskComms struct {
 	create   chan CreateTask
 	due      chan DueTasks
@@ -77,6 +82,7 @@ type DbTaskComms struct {
 	retry    chan RetryTask
 	release  chan ReleaseTasks
 	purge    chan PurgeTasks
+	running  chan RunningTasks
 }
 
 func initTaskComms(tasks *DbTaskComms) {
@@ -88,6 +94,7 @@ func initTaskComms(tasks *DbTaskComms) {
 	tasks.retry = make(chan RetryTask)
 	tasks.release = make(chan ReleaseTasks)
 	tasks.purge = make(chan PurgeTasks)
+	tasks.running = make(chan RunningTasks)
 }
 
 func createTask(params database.CreateTaskParams, ch chan<- CreateTask) TaskResp {
@@ -138,6 +145,12 @@ func releaseTasks(before time.Time, ch chan<- ReleaseTasks) DueTasksResp {
 func purgeTasks(before time.Time, ch chan<- PurgeTasks) DueTasksResp {
 	resp := make(chan DueTasksResp)
 	ch <- PurgeTasks{before: before, resp: resp}
+	return <-resp
+}
+
+func runningTasks(ch chan<- RunningTasks) DueTasksResp {
+	resp := make(chan DueTasksResp)
+	ch <- RunningTasks{resp: resp}
 	return <-resp
 }
 

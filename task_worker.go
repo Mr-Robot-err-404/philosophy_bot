@@ -19,13 +19,26 @@ func taskWorker(ctx context.Context, comms *Comms, dbComms *DbComms) {
 			return
 
 		case <-ticker.C:
+			sweepLeases(comms, dbComms)
 			drainTasks(ctx, comms, dbComms)
 		}
 	}
 }
 
 func recoverTasks(comms *Comms, dbComms *DbComms) {
-	resp := releaseTasks(time.Now(), dbComms.tasks.release)
+	orphans := runningTasks(dbComms.tasks.running)
+
+	if orphans.err != nil {
+		comms.logs <- Log{Scope: "task", Msg: "Failed to read running tasks", Err: orphans.err}
+	}
+	for _, task := range orphans.tasks {
+		held := "unknown"
+		if task.ClaimedAt.Valid {
+			held = time.Since(task.ClaimedAt.Time).Round(time.Second).String()
+		}
+		comms.logs <- Log{Scope: "task", Level: LevelWarn, Msg: fmt.Sprintf("Orphan %s -> video %s held %s on attempt %d", task.ID, task.VideoID, held, task.Attempts)}
+	}
+	resp := releaseTasks(time.Now().UTC(), dbComms.tasks.release)
 
 	if resp.err != nil {
 		comms.logs <- Log{Scope: "task", Msg: "Failed to release stale tasks", Err: resp.err}
@@ -42,6 +55,18 @@ func recoverTasks(comms *Comms, dbComms *DbComms) {
 	}
 	if len(purged.tasks) > 0 {
 		comms.logs <- Log{Scope: "task", Msg: fmt.Sprintf("Purged %d tasks older than %v", len(purged.tasks), TaskHistory)}
+	}
+}
+
+func sweepLeases(comms *Comms, dbComms *DbComms) {
+	resp := releaseTasks(time.Now().Add(-TaskLease).UTC(), dbComms.tasks.release)
+
+	if resp.err != nil {
+		comms.logs <- Log{Scope: "task", Msg: "Failed to sweep expired leases", Err: resp.err}
+		return
+	}
+	for _, task := range resp.tasks {
+		comms.logs <- Log{Scope: "task", Level: LevelWarn, Msg: fmt.Sprintf("Lease expired on %s -> video %s requeued after %v", task.ID, task.VideoID, TaskLease)}
 	}
 }
 

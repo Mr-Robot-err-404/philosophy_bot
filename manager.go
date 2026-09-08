@@ -254,8 +254,13 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 			again.resp <- TaskResp{task: task, err: err}
 
 		case release := <-comms.tasks.release:
-			tasks, err := queries.ReleaseStaleTasks(ctx, release.before)
+			before := sql.NullTime{Time: release.before, Valid: true}
+			tasks, err := queries.ReleaseStaleTasks(ctx, before)
 			release.resp <- DueTasksResp{tasks: tasks, err: err}
+
+		case running := <-comms.tasks.running:
+			tasks, err := queries.GetRunningTasks(ctx)
+			running.resp <- DueTasksResp{tasks: tasks, err: err}
 
 		case purge := <-comms.tasks.purge:
 			tasks, err := queries.DeleteOldTasks(ctx, sql.NullTime{Time: purge.before, Valid: true})
