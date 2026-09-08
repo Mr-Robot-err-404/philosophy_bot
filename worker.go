@@ -3,15 +3,9 @@ package main
 import (
 	"bot/philosophy/email"
 	"bot/philosophy/internal/database"
-	"bot/philosophy/internal/helper"
 	"fmt"
 	"time"
 )
-
-type Worker struct {
-	Payload HookPayload
-	Delay   time.Duration
-}
 
 type TaskResult struct {
 	Info CommentInfo
@@ -76,7 +70,24 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 		return
 	}
 	c = 0
-	scheduleJob(payload, cfg.jobs)
+
+	state := readServerState(comms.rd)
+	if _, seen := state.Seen[payload.VideoId]; seen {
+		comms.logs <- Log{Scope: "hook", Msg: fmt.Sprintf("Already visited -> %s", payload.VideoId)}
+		return
+	}
+	quotes := getUnusedQuotes(payload.ChannelId, dbComms.rd.unused)
+
+	if quotes.err != nil {
+		comms.logs <- Log{Scope: "hook", Msg: "Failed to load quotes", Err: quotes.err}
+		return
+	}
+	if len(quotes.quotes) == 0 {
+		comms.logs <- Log{Scope: "hook", Level: LevelWarn, Msg: fmt.Sprintf("Quote pool exhausted for %s", channel.Handle)}
+		return
+	}
+	stack := shuffleStack(quotes.quotes)
+	enqueueTask(payload, stack[0], &comms, &dbComms)
 }
 
 func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload, schedule map[string]time.Time, done <-chan struct{}) {
@@ -169,81 +180,4 @@ func renewSubscription(logs chan<- Log, callback string, bearer string, dbComms 
 		}
 		subscribeToChannels(resp.channels, callback, bearer, logs)
 	}
-}
-
-func receiveJobs(jobs <-chan Worker, ch chan<- TaskResult, comms *Comms, dbComms *DbComms) {
-	for task := range jobs {
-		state := readServerState(comms.rd)
-
-		curr := task.Payload
-		videoId := curr.VideoId
-		channelId := curr.ChannelId
-
-		if curr.Err != nil {
-			comms.logs <- Log{Scope: "task", Msg: "Malformed payload", Err: curr.Err}
-			continue
-		}
-		_, exists := state.Seen[videoId]
-		if exists {
-			comms.logs <- Log{Scope: "task", Msg: fmt.Sprintf("Already visited -> %s", videoId)}
-			continue
-		}
-		comms.writeSeen <- videoId
-
-		err := simpleMan(videoId, dbComms.saveVid)
-		if err != nil {
-			comms.logs <- Log{Scope: "task", Msg: fmt.Sprintf("Failed to record video %s", videoId), Err: err}
-			continue
-		}
-		resp := getUnusedQuotes(channelId, dbComms.rd.unused)
-
-		if resp.err != nil {
-			comms.logs <- Log{Scope: "task", Msg: "Failed to load quotes", Err: resp.err}
-			continue
-		}
-		if len(resp.quotes) == 0 {
-			comms.logs <- Log{Scope: "task", Level: LevelWarn, Msg: fmt.Sprintf("Quote pool exhausted for channel %s", channelId)}
-			continue
-		}
-		stack := shuffleStack(resp.quotes)
-		q := stack[0]
-
-		payload := CommentPayload{}
-		payload.Snippet.ChannelId = channelId
-		payload.Snippet.VideoId = videoId
-		payload.Snippet.TopLevelComment.Snippet.TextOriginal = constructWisdom(q.Quote, q.Author)
-
-		info := CommentInfo{VideoId: videoId, ChannelId: channelId, QuoteId: q.ID, Payload: payload}
-		comms.logs <- Log{Scope: "task", Msg: fmt.Sprintf("Queued video %s -> quote %d", info.VideoId, info.QuoteId)}
-		comms.points <- UpdateQuotaPoints{value: state.QuotaPoints - COMMENT_COST}
-
-		dbComms.saveUsage <- Usage{channelId: channelId, quoteId: q.ID}
-
-		go executeTask(ch, info, state.Credentials, task.Delay, comms.logs)
-	}
-}
-
-func receiveTaskResults(ch <-chan TaskResult, logs chan<- Log, dbComms *DbComms) {
-	for result := range ch {
-		if result.Err != nil {
-			logs <- Log{Scope: "task", Msg: "Post failed", Err: result.Err}
-			continue
-		}
-		params := database.CreateCommentParams{ID: result.Id, QuoteID: result.Info.QuoteId}
-		dbComms.saveComment <- params
-	}
-}
-
-func executeTask(ch chan<- TaskResult, info CommentInfo, credentials Credentials, delay time.Duration, logs chan<- Log) {
-	logs <- Log{Scope: "task", Msg: fmt.Sprintf("Waiting %v before posting", delay)}
-	time.Sleep(delay)
-	logs <- Log{Scope: "task", Msg: fmt.Sprintf("Posting to video %s", info.VideoId)}
-	postComment(info, credentials, ch)
-}
-
-func scheduleJob(payload HookPayload, jobs chan<- Worker) error {
-	ts := helper.RndInt(MinWait, MaxWait)
-	delay := time.Duration(ts) * time.Second
-	jobs <- Worker{Payload: payload, Delay: delay}
-	return nil
 }

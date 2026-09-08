@@ -2,6 +2,7 @@ package main
 
 import (
 	"bot/philosophy/internal/database"
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -227,6 +228,38 @@ func dbManager(comms *DbComms, logs chan<- Log) {
 		case freq := <-comms.updateFreq:
 			_, err := queries.UpdateChannelFreq(ctx, freq.params)
 			freq.resp <- err
+
+		case create := <-comms.tasks.create:
+			task, err := queries.CreateTask(ctx, create.params)
+			create.resp <- TaskResp{task: task, err: err}
+
+		case due := <-comms.tasks.due:
+			tasks, err := queries.GetDueTasks(ctx, due.limit)
+			due.resp <- DueTasksResp{tasks: tasks, err: err}
+
+		case claim := <-comms.tasks.claim:
+			task, err := queries.ClaimTask(ctx, claim.id)
+			claim.resp <- TaskResp{task: task, err: err}
+
+		case done := <-comms.tasks.complete:
+			task, err := queries.CompleteTask(ctx, done.params)
+			done.resp <- TaskResp{task: task, err: err}
+
+		case failed := <-comms.tasks.fail:
+			task, err := queries.FailTask(ctx, failed.params)
+			failed.resp <- TaskResp{task: task, err: err}
+
+		case again := <-comms.tasks.retry:
+			task, err := queries.RetryTask(ctx, again.params)
+			again.resp <- TaskResp{task: task, err: err}
+
+		case release := <-comms.tasks.release:
+			tasks, err := queries.ReleaseStaleTasks(ctx, release.before)
+			release.resp <- DueTasksResp{tasks: tasks, err: err}
+
+		case purge := <-comms.tasks.purge:
+			tasks, err := queries.DeleteOldTasks(ctx, sql.NullTime{Time: purge.before, Valid: true})
+			purge.resp <- DueTasksResp{tasks: tasks, err: err}
 
 		case rdTag := <-comms.rd.findTag:
 			channel, err := queries.FindTag(ctx, rdTag.value)

@@ -35,7 +35,6 @@ type Startup struct {
 }
 
 type Config struct {
-	jobs    chan Worker
 	comms   Comms
 	dbComms DbComms
 	oauth   *oauth2.Config
@@ -82,6 +81,7 @@ type DbComms struct {
 	wisdom        chan Wisdom
 	resetQuota    chan bool
 	updateFreq    chan Freq
+	tasks         DbTaskComms
 	rd            DbReadComms
 }
 type SeenVid struct {
@@ -249,8 +249,6 @@ func startServer(startup Startup) {
 
 	initComms(&comms, &dbComms)
 
-	results := make(chan TaskResult)
-	cfg.jobs = make(chan Worker)
 	cfg.comms = comms
 	cfg.dbComms = dbComms
 	cfg.email = startup.email_payload
@@ -282,8 +280,7 @@ func startServer(startup Startup) {
 	go stateManager(serverState, &cfg.comms, &dbComms)
 	go dbManager(&dbComms, cfg.comms.logs)
 
-	go receiveJobs(cfg.jobs, results, &cfg.comms, &dbComms)
-	go receiveTaskResults(results, cfg.comms.logs, &dbComms)
+	go taskWorker(signals, &cfg.comms, &dbComms)
 
 	go serverCronJob(&cfg.comms, &cfg.dbComms, cfg.email, serverState.Schedule, done)
 	go renewSubscription(cfg.comms.logs, callback, credentials.bearer, &cfg.dbComms)
@@ -399,4 +396,6 @@ func initComms(comms *Comms, dbComms *DbComms) {
 	dbComms.wisdom = make(chan Wisdom)
 	dbComms.updateFreq = make(chan Freq)
 	dbComms.resetQuota = make(chan bool)
+
+	initTaskComms(&dbComms.tasks)
 }
