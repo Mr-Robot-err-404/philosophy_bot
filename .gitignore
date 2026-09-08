@@ -4,3 +4,4 @@ tmp
 .env
 app.db
 client_secret.json
+AGENTS.md

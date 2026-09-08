@@ -53,7 +53,7 @@ func main() {
 		// stats(cache, credentials.key)
 		return
 	}
-	if *philosophy_mode == false {
+	if !*philosophy_mode {
 		log.Fatal("Diogenes lost his bowl")
 	}
 	exploreTrending(cache, credentials)
