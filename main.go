@@ -55,6 +55,13 @@ func main() {
 	}
 }
 
+func serverAddr() string {
+	if addr := os.Getenv("SERVER_ADDR"); addr != "" {
+		return addr
+	}
+	return "127.0.0.1:49399"
+}
+
 func loadCache() (Credentials, TableCache) {
 	credentials := getCredentials()
 
@@ -78,6 +85,7 @@ func runRefresh(args []string) {
 
 func runServer(args []string) {
 	fs := flag.NewFlagSet("server", flag.ExitOnError)
+	addr := fs.String("addr", serverAddr(), "local listen address")
 	fs.Parse(args)
 
 	sisyphus()
@@ -96,6 +104,7 @@ func runServer(args []string) {
 		google_config: config,
 		email_payload: getEmailPayload(),
 		cache:         cache,
+		addr:          *addr,
 	}
 	startServer(startup)
 }

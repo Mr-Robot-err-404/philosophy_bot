@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.ngrok.com/ngrok"
@@ -27,6 +28,7 @@ type Startup struct {
 	cache         TableCache
 	google_config *oauth2.Config
 	email_payload email.Payload
+	addr          string
 }
 
 type Config struct {
@@ -277,6 +279,21 @@ func startServer(startup Startup) {
 	defer unsubscribeChannels(callback, credentials.bearer)
 
 	comms.logs <- Log{Msg: fmt.Sprintf("APP URL -> %s", listener.URL())}
+
+	local := &http.Server{
+		Addr:         startup.addr,
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	go func() {
+		comms.logs <- Log{Msg: fmt.Sprintf("Listening locally -> %s", startup.addr)}
+
+		if err := local.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			comms.logs <- Log{Err: fmt.Errorf("local listener: %w", err)}
+		}
+	}()
 
 	err = http.Serve(listener, mux)
 	if err != nil {

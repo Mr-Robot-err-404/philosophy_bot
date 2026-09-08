@@ -15,6 +15,13 @@ import (
 //go:embed templates/*.html static/*
 var assets embed.FS
 
+func listenAddr() string {
+	if addr := os.Getenv("DASHBOARD_ADDR"); addr != "" {
+		return addr
+	}
+	return "127.0.0.1:49400"
+}
+
 func dbPath() string {
 	if path := os.Getenv("DB_PATH"); path != "" {
 		return path
@@ -23,7 +30,7 @@ func dbPath() string {
 }
 
 func main() {
-	addr := flag.String("addr", ":8080", "listen address")
+	addr := flag.String("addr", listenAddr(), "listen address")
 	path := flag.String("db", dbPath(), "path to app.db")
 	flag.Parse()
 
@@ -71,7 +78,7 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	log.Printf("dashboard on http://localhost%s (db: %s)", *addr, *path)
+	log.Printf("dashboard on http://%s (db: %s)", *addr, *path)
 	log.Fatal(srv.ListenAndServe())
 }
 
