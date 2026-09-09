@@ -11,8 +11,6 @@ type VideoSearch struct {
 	Err     error
 }
 
-const SearchCost = 1000
-
 func searchTrendingRegions(key string, vid_map map[string]bool) ([]string, time.Duration) {
 	total_results := []string{}
 	err_resp := []error{}

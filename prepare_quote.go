@@ -2,16 +2,16 @@ package main
 
 import "bot/philosophy/internal/database"
 
-func prepareComments(ranked []RankedItem, stack []database.Cornucopium, quota int) []ReplyInfo {
+func prepareComments(ranked []RankedItem, stack []database.Cornucopium, budget int) []ReplyInfo {
 	resp := []ReplyInfo{}
-	capacity := (quota / COMMENT_COST) - 1
+	capacity := budget / COMMENT_COST
 
-	if len(stack) == 0 {
+	if len(stack) == 0 || capacity <= 0 {
 		return resp
 	}
 
 	for i, comment := range ranked {
-		if len(resp) > capacity {
+		if len(resp) >= capacity {
 			return resp
 		}
 		idx := i % len(stack)

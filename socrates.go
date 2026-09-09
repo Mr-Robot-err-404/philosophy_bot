@@ -22,7 +22,8 @@ func exploreTrending(cache TableCache, credentials Credentials) {
 	printSummary(Summary{dur: dur, title: "Explored Comment Threads"})
 
 	stack := shuffleStack(cache.quotes)
-	payload := prepareComments(comments, stack, quota)
+	scanned := (len(RegionCodes) * LIST_COST) + (len(trending) * LIST_COST)
+	payload := prepareComments(comments, stack, quota-QuotaFloor-scanned)
 
 	wisdom, dur := dropWisdom(payload, credentials)
 	printSummary(Summary{dur: dur, title: "Dropped wisdom", end: true})
@@ -30,27 +31,30 @@ func exploreTrending(cache TableCache, credentials Credentials) {
 	storeProgress(wisdom)
 }
 
-func enlightenTrendingPage(comms *Comms, state ServerState) []WiseReply {
-	cost := SearchCost
+func enlightenTrendingPage(comms *Comms, state ServerState, budget int) []WiseReply {
+	cost := len(RegionCodes) * LIST_COST
 	videos, dur := searchTrendingRegions(state.Credentials.key, state.Seen)
 
-	summary := makeSummary(Summary{dur: dur, title: "Explored Trending Videos"})
-	comms.logs <- Log{Msg: summary}
+	summary := makeSummary(Summary{dur: dur, title: fmt.Sprintf("Explored Trending Videos -> %d fresh", len(videos))})
+	comms.logs <- Log{Scope: "cron", Msg: summary}
 
 	comments, dur := exploreCommentThreads(state.Credentials.key, videos)
-	cost += len(videos)
+	cost += len(videos) * LIST_COST
 
-	summary = makeSummary(Summary{dur: dur, title: fmt.Sprintf("Explored %d Comment Threads", len(videos))})
-	comms.logs <- Log{Msg: summary}
+	summary = makeSummary(Summary{dur: dur, title: fmt.Sprintf("Explored %d Comment Threads -> %d candidates", len(videos), len(comments))})
+	comms.logs <- Log{Scope: "cron", Msg: summary}
 
 	stack := shuffleStack(state.Quotes)
-	payload := prepareComments(comments, stack, state.QuotaPoints)
-	wisdom, dur := dropWisdom(payload, state.Credentials)
-	cost += COMMENT_COST * len(comments)
+	payload := prepareComments(comments, stack, budget-cost)
+	cost += COMMENT_COST * len(payload)
 
-	summary = makeSummary(Summary{dur: dur, title: fmt.Sprintf("Dropped %d pieces of wisdom", len(wisdom))})
-	comms.logs <- Log{Msg: summary}
-	comms.points <- UpdateQuotaPoints{value: state.QuotaPoints - cost}
+	wisdom, dur := dropWisdom(payload, state.Credentials)
+
+	summary = makeSummary(Summary{dur: dur, title: fmt.Sprintf("Dropped %d of %d attempted", len(wisdom), len(payload))})
+	comms.logs <- Log{Scope: "cron", Msg: summary}
+
+	comms.spend <- Spend{cost: cost, reason: "trending"}
+	comms.logs <- Log{Scope: "cron", Msg: fmt.Sprintf("Trending spent %d -> %d scan + %d posts | %d remaining", cost, len(RegionCodes)+len(videos), len(payload), state.QuotaPoints-cost)}
 
 	return wisdom
 }

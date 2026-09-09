@@ -114,6 +114,14 @@ func stateManager(initial ServerState, comms *Comms, dbComms *DbComms) {
 		case quota := <-comms.points:
 			state.QuotaPoints = quota.value
 			dbComms.saveQuota <- quota.value
+
+		case spend := <-comms.spend:
+			state.QuotaPoints -= spend.cost
+
+			if state.QuotaPoints < 0 {
+				state.QuotaPoints = 0
+			}
+			dbComms.saveQuota <- state.QuotaPoints
 		}
 	}
 }

@@ -25,6 +25,7 @@ type Quota struct {
 	MarginPercent int
 	Channels      int
 	Cost          int
+	Floor         int
 	Spendable     int
 	Breached      bool
 	UpdatedAt     string
@@ -130,6 +131,7 @@ const (
 	quotaMax         = 10000
 	commentCost      = 50
 	maxWebhookMargin = 2500
+	quotaFloor       = 100
 )
 
 func webhookMargin(channels int) int {
@@ -199,10 +201,11 @@ func loadQuota(db *sql.DB) (Quota, error) {
 	q.MarginMax = maxWebhookMargin
 	q.Margin = webhookMargin(q.Channels)
 	q.Cost = commentCost
+	q.Floor = quotaFloor
 	q.UpdatedAt = prettyTime(updated.String)
 	q.LastLogin = prettyTime(login.String)
 
-	q.Spendable = q.Points - q.Margin
+	q.Spendable = q.Points - q.Margin - q.Floor
 	q.Breached = q.Spendable < 0
 
 	if q.Spendable < 0 {

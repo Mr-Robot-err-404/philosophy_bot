@@ -28,6 +28,10 @@ type UpdateQuotaPoints struct {
 	value int
 	resp  chan bool
 }
+type Spend struct {
+	cost   int
+	reason string
+}
 type Log struct {
 	Msg   string
 	Err   error
@@ -51,8 +55,8 @@ func evaluateXMLData(data string, points int, cfg *Config) {
 		comms.logs <- Log{Scope: "hook", Level: LevelWarn, Msg: fmt.Sprintf("Video too old -> %s (%v ago)", payload.VideoId, elapsed.Round(time.Minute))}
 		return
 	}
-	if points < 500 {
-		comms.logs <- Log{Scope: "hook", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota -> %d/500", points)}
+	if points < HookFloor {
+		comms.logs <- Log{Scope: "hook", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota -> %d/%d", points, HookFloor)}
 		return
 	}
 	resp := findChannel(payload.ChannelId, dbComms.rd.get)
@@ -151,28 +155,31 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload, 
 				continue
 			}
 			margin := webhookMargin(len(tracked.channels))
-			required := TrendingReserve + margin
+			required := TrendingReserve + margin + QuotaFloor
 
 			if state.QuotaPoints < required {
-				comms.logs <- Log{Scope: "cron", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota for trending -> %d/%d (reserve %d + margin %d for %d channels)", state.QuotaPoints, required, TrendingReserve, margin, len(tracked.channels))}
+				comms.logs <- Log{Scope: "cron", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota for trending -> %d/%d (reserve %d + margin %d + floor %d)", state.QuotaPoints, required, TrendingReserve, margin, QuotaFloor)}
 				continue
 			}
-			comms.logs <- Log{Scope: "cron", Msg: fmt.Sprintf("Trending cleared -> %d available, holding %d for %d channels", state.QuotaPoints, margin, len(tracked.channels))}
-			wisdom := enlightenTrendingPage(comms, state)
+			budget := state.QuotaPoints - margin - QuotaFloor
+			comms.logs <- Log{Scope: "cron", Msg: fmt.Sprintf("Trending cleared -> budget %d of %d | holding %d for %d channels + %d floor", budget, state.QuotaPoints, margin, len(tracked.channels), QuotaFloor)}
+
+			wisdom := enlightenTrendingPage(comms, state, budget)
 			saveProgress(wisdom, dbComms, comms.logs, comms.writeSeen)
 
 		case <-statsCron.C:
 			statsCron.Reset(StatsInterval)
 			comms.schedule <- ScheduleTick{job: "stats", every: StatsInterval}
 			state := readServerState(comms.rd)
-			minimum, width := statsQuota(alternate, 1250)
+			minimum, width := statsQuota(alternate, StatsReserve)
+			required := minimum + QuotaFloor
 
-			if state.QuotaPoints < minimum {
-				comms.logs <- Log{Scope: "cron", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota for stats -> %d/%d", state.QuotaPoints, minimum)}
+			if state.QuotaPoints < required {
+				comms.logs <- Log{Scope: "cron", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota for stats -> %d/%d", state.QuotaPoints, required)}
 				toggle(&alternate)
 				continue
 			}
-			info := StatsCall{key: state.Credentials.key, logs: comms.logs, width: width}
+			info := StatsCall{key: state.Credentials.key, logs: comms.logs, spend: comms.spend, width: width}
 			stats(dbComms, &alternate, info)
 		}
 	}

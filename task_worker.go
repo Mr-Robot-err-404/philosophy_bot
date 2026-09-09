@@ -131,7 +131,9 @@ func runTask(comms *Comms, dbComms *DbComms, id string) {
 			comms.logs <- Log{Scope: "task", Msg: fmt.Sprintf("Failed to reschedule %s", task.ID), Err: again.err}
 			return
 		}
-		comms.logs <- Log{Scope: "task", Level: LevelWarn, Msg: fmt.Sprintf("Attempt %d/%d failed, retrying in %v -> %v", task.Attempts, TaskMaxAttempts, TaskRetryDelay, result.Err)}
+		comms.spend <- Spend{cost: COMMENT_COST, reason: "retry"}
+
+		comms.logs <- Log{Scope: "task", Level: LevelWarn, Msg: fmt.Sprintf("Attempt %d/%d failed, retrying in %v | quota -%d -> %v", task.Attempts, TaskMaxAttempts, TaskRetryDelay, COMMENT_COST, result.Err)}
 		return
 	}
 	done := completeTask(task.ID, result.Id, dbComms.tasks.complete)

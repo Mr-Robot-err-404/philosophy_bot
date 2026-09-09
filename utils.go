@@ -9,9 +9,21 @@ import (
 
 const COMMENT_COST = 50
 
+const LIST_COST = 1
+
+const QuotaFloor = 100
+
 const MaxWebhookMargin = 2500
 
-const TrendingReserve = 750
+const MaxTrendingVideos = 50
+
+const MinTrendingYield = 3
+
+const TrendingScanCost = (len(RegionCodes) * LIST_COST) + (MaxTrendingVideos * LIST_COST)
+
+const TrendingReserve = TrendingScanCost + (MinTrendingYield * COMMENT_COST)
+
+const HookFloor = QuotaFloor + COMMENT_COST
 
 func webhookMargin(channels int) int {
 	margin := channels * COMMENT_COST
@@ -94,6 +106,8 @@ func makeLikeMap[C GenericComment](comments []C) map[string]int {
 	}
 	return likeMap
 }
+
+const StatsReserve = 100
 
 func statsQuota(isReplies bool, base int) (int, int) {
 	if isReplies {

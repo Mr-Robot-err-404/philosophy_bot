@@ -185,8 +185,7 @@ func enqueueTask(payload HookPayload, quote database.Cornucopium, comms *Comms, 
 		comms.logs <- Log{Scope: "task", Msg: fmt.Sprintf("Failed to enqueue video %s", payload.VideoId), Err: resp.err}
 		return
 	}
-	state := readServerState(comms.rd)
-	comms.points <- UpdateQuotaPoints{value: state.QuotaPoints - COMMENT_COST}
+	comms.spend <- Spend{cost: COMMENT_COST, reason: "comment"}
 
 	comms.logs <- Log{Scope: "task", Msg: fmt.Sprintf("Enqueued %s -> active in %v | quota -%d", payload.VideoId, delay.Round(time.Second), COMMENT_COST)}
 }

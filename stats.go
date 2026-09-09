@@ -40,12 +40,18 @@ type UpdatedStats struct {
 type StatsCall struct {
 	key   string
 	logs  chan<- Log
+	spend chan<- Spend
 	width int
 }
 
 func updateStats[C GenericComment](comments []C, info StatsCall, likeMap map[string]int) []UpdatedStats {
 	mat := splitWorkload(comments, info.width)
 	stats := []UpdatedStats{}
+
+	if len(mat) > 0 {
+		info.spend <- Spend{cost: len(mat) * LIST_COST, reason: "stats"}
+		info.logs <- Log{Scope: "stats", Msg: fmt.Sprintf("Scanning %d items in %d calls -> %d quota", len(comments), len(mat), len(mat)*LIST_COST)}
+	}
 
 	var wg sync.WaitGroup
 	ch := make(chan StatsChan)
@@ -112,12 +118,9 @@ func retrieveStats[C GenericComment](comments []C, key string, ch chan<- StatsCh
 	ch <- StatsChan{Data: stats.Items}
 }
 
-func getStats[C GenericComment](comments []C, key string, logs chan<- Log, width int) []UpdatedStats {
+func getStats[C GenericComment](comments []C, info StatsCall) []UpdatedStats {
 	likeMap := makeLikeMap(comments)
-	info := StatsCall{key: key, logs: logs, width: width}
-
 	return updateStats(comments, info, likeMap)
-
 }
 
 func stats(dbComms *DbComms, alternate *bool, info StatsCall) {
@@ -130,7 +133,7 @@ func stats(dbComms *DbComms, alternate *bool, info StatsCall) {
 			info.logs <- Log{Err: resp.err}
 			return
 		}
-		stats := getStats(resp.replies, info.key, info.logs, info.width)
+		stats := getStats(resp.replies, info)
 
 		if len(stats) > 0 {
 			storeLikes(stats, info.logs, "replies")
@@ -143,7 +146,7 @@ func stats(dbComms *DbComms, alternate *bool, info StatsCall) {
 		info.logs <- Log{Err: resp.err}
 		return
 	}
-	stats := getStats(resp.comments, info.key, info.logs, info.width)
+	stats := getStats(resp.comments, info)
 
 	if len(stats) > 0 {
 		storeLikes(stats, info.logs, "comments")

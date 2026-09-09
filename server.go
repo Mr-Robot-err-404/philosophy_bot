@@ -67,6 +67,7 @@ type Comms struct {
 	refreshTkn  chan WriteToken
 	logs        chan Log
 	points      chan UpdateQuotaPoints
+	spend       chan Spend
 	schedule    chan ScheduleTick
 }
 type DbComms struct {
@@ -369,6 +370,7 @@ func initComms(comms *Comms, dbComms *DbComms) {
 	comms.writeSeen = make(chan string)
 	comms.logs = make(chan Log)
 	comms.points = make(chan UpdateQuotaPoints)
+	comms.spend = make(chan Spend)
 	comms.schedule = make(chan ScheduleTick)
 
 	rdComms := DbReadComms{}

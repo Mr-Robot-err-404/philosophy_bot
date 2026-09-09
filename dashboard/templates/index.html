@@ -38,6 +38,7 @@
     <dd>{{ if .Quota.Breached }}<span class="warn">{{ .Quota.Margin }}</span>{{ else }}{{ .Quota.Margin }}{{ end }}
       <span class="meta">/ {{ .Quota.MarginMax }} max</span></dd>
     <dt>on standby</dt><dd>{{ .Quota.Channels }} channels &times; {{ .Quota.Cost }}<span class="meta"> pts</span></dd>
+    <dt>safety floor</dt><dd>{{ .Quota.Floor }}<span class="meta"> pts</span></dd>
     <dt>spendable</dt>
     <dd>{{ if .Quota.Breached }}<span class="warn">margin breached</span>{{ else }}{{ .Quota.Spendable }}{{ end }}</dd>
     <dt>updated</dt><dd>{{ .Quota.UpdatedAt }}{{ if .Quota.Stale }} <span class="warn">stale</span>{{ end }}</dd>
