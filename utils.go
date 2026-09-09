@@ -9,6 +9,19 @@ import (
 
 const COMMENT_COST = 50
 
+const MaxWebhookMargin = 2500
+
+const TrendingReserve = 750
+
+func webhookMargin(channels int) int {
+	margin := channels * COMMENT_COST
+
+	if margin > MaxWebhookMargin {
+		return MaxWebhookMargin
+	}
+	return margin
+}
+
 type JsonLog struct {
 	Msg   string `json:"msg,omitempty"`
 	Err   string `json:"err,omitempty"`

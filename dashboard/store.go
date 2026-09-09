@@ -17,12 +17,19 @@ type Totals struct {
 }
 
 type Quota struct {
-	Points    int
-	Max       int
-	Percent   int
-	UpdatedAt string
-	LastLogin string
-	Stale     bool
+	Points        int
+	Max           int
+	Percent       int
+	Margin        int
+	MarginMax     int
+	MarginPercent int
+	Channels      int
+	Cost          int
+	Spendable     int
+	Breached      bool
+	UpdatedAt     string
+	LastLogin     string
+	Stale         bool
 }
 
 type Day struct {
@@ -119,7 +126,20 @@ type Stats struct {
 	Generated   string
 }
 
-const quotaMax = 10000
+const (
+	quotaMax         = 10000
+	commentCost      = 50
+	maxWebhookMargin = 2500
+)
+
+func webhookMargin(channels int) int {
+	margin := channels * commentCost
+
+	if margin > maxWebhookMargin {
+		return maxWebhookMargin
+	}
+	return margin
+}
 
 func openDB(path string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", path))
@@ -172,12 +192,25 @@ func loadQuota(db *sql.DB) (Quota, error) {
 	if err := db.QueryRow("select last_login from login limit 1").Scan(&login); err != nil && err != sql.ErrNoRows {
 		return q, err
 	}
+	if q.Channels, err = scanCount(db, "select count(*) from channels"); err != nil {
+		return q, err
+	}
 	q.Max = quotaMax
+	q.MarginMax = maxWebhookMargin
+	q.Margin = webhookMargin(q.Channels)
+	q.Cost = commentCost
 	q.UpdatedAt = prettyTime(updated.String)
 	q.LastLogin = prettyTime(login.String)
 
+	q.Spendable = q.Points - q.Margin
+	q.Breached = q.Spendable < 0
+
+	if q.Spendable < 0 {
+		q.Spendable = 0
+	}
 	if q.Max > 0 {
 		q.Percent = q.Points * 100 / q.Max
+		q.MarginPercent = q.Margin * 100 / q.Max
 	}
 	if ts, ok := parseTime(updated.String); ok {
 		q.Stale = time.Since(ts) > 24*time.Hour

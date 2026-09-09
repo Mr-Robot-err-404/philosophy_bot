@@ -28,9 +28,18 @@
 
 <section class="panel">
   <h2>quota</h2>
-  <div class="bar"><div class="fill{{ if lt .Quota.Percent 25 }} low{{ end }}" style="width:{{ .Quota.Percent }}%"></div></div>
+  <div class="bar">
+    <div class="fill{{ if lt .Quota.Percent 25 }} low{{ end }}" style="width:{{ .Quota.Percent }}%"></div>
+    <div class="reserve" style="width:{{ .Quota.MarginPercent }}%" title="webhook margin — {{ .Quota.Margin }} points held back"></div>
+  </div>
   <p class="bar-label">{{ .Quota.Points }} / {{ .Quota.Max }} ({{ .Quota.Percent }}%)</p>
   <dl>
+    <dt>webhook margin</dt>
+    <dd>{{ if .Quota.Breached }}<span class="warn">{{ .Quota.Margin }}</span>{{ else }}{{ .Quota.Margin }}{{ end }}
+      <span class="meta">/ {{ .Quota.MarginMax }} max</span></dd>
+    <dt>on standby</dt><dd>{{ .Quota.Channels }} channels &times; {{ .Quota.Cost }}<span class="meta"> pts</span></dd>
+    <dt>spendable</dt>
+    <dd>{{ if .Quota.Breached }}<span class="warn">margin breached</span>{{ else }}{{ .Quota.Spendable }}{{ end }}</dd>
     <dt>updated</dt><dd>{{ .Quota.UpdatedAt }}{{ if .Quota.Stale }} <span class="warn">stale</span>{{ end }}</dd>
     <dt>last login</dt><dd>{{ .Quota.LastLogin }}</dd>
   </dl>

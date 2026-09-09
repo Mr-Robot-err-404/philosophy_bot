@@ -144,10 +144,20 @@ func serverCronJob(comms *Comms, dbComms *DbComms, email_payload email.Payload, 
 			comms.schedule <- ScheduleTick{job: "trending", every: TrendingInterval}
 			state := readServerState(comms.rd)
 
-			if state.QuotaPoints < 3250 {
-				comms.logs <- Log{Scope: "cron", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota for trending -> %d/%d", state.QuotaPoints, 3250)}
+			tracked := getAllChannels(dbComms.rd.getAll)
+
+			if tracked.err != nil {
+				comms.logs <- Log{Scope: "cron", Msg: "Failed to count channels for webhook margin", Err: tracked.err}
 				continue
 			}
+			margin := webhookMargin(len(tracked.channels))
+			required := TrendingReserve + margin
+
+			if state.QuotaPoints < required {
+				comms.logs <- Log{Scope: "cron", Level: LevelWarn, Msg: fmt.Sprintf("Insufficient quota for trending -> %d/%d (reserve %d + margin %d for %d channels)", state.QuotaPoints, required, TrendingReserve, margin, len(tracked.channels))}
+				continue
+			}
+			comms.logs <- Log{Scope: "cron", Msg: fmt.Sprintf("Trending cleared -> %d available, holding %d for %d channels", state.QuotaPoints, margin, len(tracked.channels))}
 			wisdom := enlightenTrendingPage(comms, state)
 			saveProgress(wisdom, dbComms, comms.logs, comms.writeSeen)
 
