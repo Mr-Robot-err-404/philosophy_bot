@@ -12,6 +12,7 @@
   <span class="meta">generated {{ .Generated }}</span>
 </header>
 
+<div class="layout">
 <main>
 
 <section class="cards">
@@ -40,6 +41,7 @@
   <dl>
     <dt>last comment</dt><dd>{{ .Health.LastComment }}</dd>
     <dt>last reply</dt><dd>{{ .Health.LastReply }}</dd>
+    <dt>last post</dt><dd>{{ .Health.LastPost }}</dd>
     <dt>idle</dt>
     <dd>{{ if .Health.Idle }}<span class="warn">{{ .Health.DaysIdle }} days</span>{{ else }}<span class="ok">active</span>{{ end }}</dd>
     <dt>quote pool</dt><dd>{{ .UnusedPool }} unused / {{ .Totals.Quotes }}</dd>
@@ -71,14 +73,26 @@
 </section>
 
 <section class="panel">
-  <h2>activity <span class="meta">last 30 days</span></h2>
-  <div class="chart">
+  <h2>activity <span class="meta">last 30 days &middot; peak {{ .Wave.Peak }}</span></h2>
+  <svg class="wave" viewBox="0 0 {{ .Wave.Width }} {{ .Wave.Height }}" preserveAspectRatio="none" role="img">
+    <defs>
+      <linearGradient id="waveFade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35"/>
+        <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon class="wave-area" points="{{ .Wave.Line }}"/>
+    <polyline class="wave-line" points="{{ .Wave.Line }}"/>
+    <line class="wave-base" x1="0" y1="{{ .Wave.Mid }}" x2="{{ .Wave.Width }}" y2="{{ .Wave.Mid }}"/>
     {{ range .Activity }}
-    <div class="col" title="{{ .Date }} — {{ .Comments }} comments, {{ .Replies }} replies">
-      <div class="stack" style="height:{{ .Percent }}%"></div>
-      <span class="tick">{{ if .Total }}{{ .Total }}{{ end }}</span>
-    </div>
+    <rect class="wave-hit" x="{{ .X }}" y="0" width="{{ .W }}" height="{{ $.Wave.Height }}">
+      <title>{{ .Date }} — {{ .Comments }} comments, {{ .Replies }} replies</title>
+    </rect>
     {{ end }}
+  </svg>
+  <div class="wave-axis">
+    <span class="meta">{{ with index .Activity 0 }}{{ .Date }}{{ end }}</span>
+    <span class="meta">today</span>
   </div>
 </section>
 
@@ -161,6 +175,44 @@
 </section>
 
 </main>
+
+<aside class="rail">
+  <section class="panel">
+    <h2>task queue <span class="meta">{{ .Tasks.Counts.Total }} total</span></h2>
+
+    <ul class="tally">
+      <li><span class="dot pending"></span>scheduled<b>{{ .Tasks.Counts.Pending }}</b></li>
+      <li><span class="dot running"></span>running<b>{{ .Tasks.Counts.Running }}</b></li>
+      <li><span class="dot done"></span>done<b>{{ .Tasks.Counts.Done }}</b></li>
+      <li><span class="dot failed"></span>failed<b>{{ .Tasks.Counts.Failed }}</b></li>
+    </ul>
+
+    <h2 class="sub">history</h2>
+    {{ if .Tasks.Recent }}
+    <ol class="feed">
+      {{ range .Tasks.Recent }}
+      <li class="task {{ .Status }}">
+        <div class="task-head">
+          <span class="status">{{ .Status }}</span>
+          <span class="meta">{{ since .Stamp }}</span>
+        </div>
+        <p class="task-body">
+          {{ if .Quote }}{{ truncate 70 .Quote }}{{ if .Author }}<span class="author">— {{ .Author }}</span>{{ end }}
+          {{ else }}<span class="meta">quote {{ .Short }} missing</span>{{ end }}
+        </p>
+        <div class="task-foot">
+          <a class="meta" href="https://www.youtube.com/watch?v={{ .VideoID }}" target="_blank" rel="noreferrer">{{ .VideoID }}</a>
+          {{ if gt .Attempts 1 }}<span class="meta">attempt {{ .Attempts }}</span>{{ end }}
+        </div>
+        {{ if .Error }}<p class="task-err">{{ truncate 120 .Error }}</p>{{ end }}
+      </li>
+      {{ end }}
+    </ol>
+    {{ else }}<p class="empty">no tasks recorded yet</p>{{ end }}
+  </section>
+</aside>
+
+</div>
 <script src="/static/countdown.js"></script>
 </body>
 </html>

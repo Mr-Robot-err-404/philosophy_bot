@@ -29,7 +29,26 @@ header {
 h1 { margin: 0; font-size: 1.1rem; letter-spacing: 0.08em; text-transform: uppercase; }
 h2 { margin: 0 0 1rem; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
 
-main { max-width: 1100px; margin: 0 auto; padding: 2rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.layout {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 2rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  align-items: start;
+  gap: 1.25rem;
+}
+
+main { min-width: 0; display: flex; flex-direction: column; gap: 1.25rem; }
+
+.rail { position: sticky; top: 2rem; }
+.rail .panel { max-height: calc(100vh - 4rem); display: flex; flex-direction: column; overflow: hidden; }
+
+@media (max-width: 1080px) {
+  .layout { grid-template-columns: minmax(0, 1fr); padding: 1rem; }
+  .rail { position: static; }
+  .rail .panel { max-height: none; }
+}
 
 .meta { color: var(--dim); font-size: 0.8rem; }
 .warn { color: var(--warn); }
@@ -70,10 +89,20 @@ dl { display: grid; grid-template-columns: auto 1fr; gap: 0.4rem 1.25rem; margin
 dt { color: var(--dim); font-size: 0.85rem; }
 dd { margin: 0; text-align: right; }
 
-.chart { display: flex; align-items: flex-end; gap: 3px; height: 140px; }
-.col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; gap: 4px; }
-.col .stack { width: 100%; min-height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; opacity: 0.85; }
-.col .tick { font-size: 0.6rem; color: var(--dim); }
+.wave { display: block; width: 100%; height: 160px; overflow: visible; }
+.wave-area { fill: url(#waveFade); }
+.wave-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: miter;
+  filter: drop-shadow(0 0 4px rgba(125, 211, 160, 0.55));
+}
+.wave-base { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.wave-hit { fill: transparent; }
+.wave-hit:hover { fill: rgba(125, 211, 160, 0.08); }
+.wave-axis { display: flex; justify-content: space-between; margin-top: 0.5rem; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 th { text-align: left; color: var(--dim); font-weight: 500; padding: 0 0.6rem 0.5rem 0; border-bottom: 1px solid var(--line); }
@@ -85,3 +114,46 @@ tr:last-child td { border-bottom: 0; }
 .jobs td { font-variant-numeric: tabular-nums; }
 .countdown { min-width: 5rem; }
 .countdown.due { color: var(--accent); }
+
+h2.sub { margin: 1.25rem 0 0.75rem; }
+
+.tally { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.tally li { display: flex; align-items: center; gap: 0.55rem; font-size: 0.85rem; color: var(--dim); }
+.tally b { margin-left: auto; color: #fff; font-variant-numeric: tabular-nums; }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.pending { background: var(--dim); }
+.dot.running { background: #6aa9e0; box-shadow: 0 0 6px #6aa9e0; animation: pulse 1.6s ease-in-out infinite; }
+.dot.done { background: var(--accent); }
+.dot.failed { background: #e0685f; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.feed { list-style: none; margin: 0; padding: 0 0.4rem 0 0; overflow-y: auto; display: grid; gap: 0.6rem; }
+
+.task {
+  border-left: 2px solid var(--line);
+  padding: 0.5rem 0 0.5rem 0.7rem;
+  background: #14171e;
+  border-radius: 0 4px 4px 0;
+}
+.task.pending { border-left-color: var(--dim); }
+.task.running { border-left-color: #6aa9e0; }
+.task.done { border-left-color: var(--accent); }
+.task.failed { border-left-color: #e0685f; }
+
+.task-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.task .status { font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
+.task.running .status { color: #6aa9e0; }
+.task.done .status { color: var(--accent); }
+.task.failed .status { color: #e0685f; }
+
+.task-body { margin: 0.35rem 0; font-size: 0.8rem; line-height: 1.45; }
+.task-body .author { display: block; margin: 0.15rem 0 0; font-size: 0.75rem; }
+.task-foot { display: flex; gap: 0.75rem; }
+.task-foot a { color: var(--dim); text-decoration: none; }
+.task-foot a:hover { color: var(--accent); text-decoration: underline; }
+.task-err { margin: 0.4rem 0 0; font-size: 0.72rem; color: #e0685f; word-break: break-word; }

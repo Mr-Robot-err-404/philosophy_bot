@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,17 @@ type Day struct {
 	Replies  int
 	Total    int
 	Percent  int
+	X        int
+	W        int
+	Y        int
+}
+
+type Wave struct {
+	Line   string
+	Width  int
+	Height int
+	Peak   int
+	Mid    int
 }
 
 type Post struct {
@@ -59,8 +71,34 @@ type Channel struct {
 type Health struct {
 	LastComment string
 	LastReply   string
+	LastPost    string
 	DaysIdle    int
 	Idle        bool
+}
+
+type TaskCounts struct {
+	Pending int
+	Running int
+	Done    int
+	Failed  int
+	Total   int
+}
+
+type Task struct {
+	ID       string
+	Short    string
+	Status   string
+	VideoID  string
+	Quote    string
+	Author   string
+	Attempts int
+	Error    string
+	Stamp    string
+}
+
+type Tasks struct {
+	Counts TaskCounts
+	Recent []Task
 }
 
 type Stats struct {
@@ -68,6 +106,8 @@ type Stats struct {
 	Quota       Quota
 	Health      Health
 	Activity    []Day
+	Wave        Wave
+	Tasks       Tasks
 	TopComments []Post
 	TopReplies  []Post
 	TopQuotes   []QuoteUse
@@ -158,11 +198,95 @@ func loadHealth(db *sql.DB) (Health, error) {
 	h.LastComment = prettyTime(comment.String)
 	h.LastReply = prettyTime(reply.String)
 
-	if ts, ok := parseTime(comment.String); ok {
-		h.DaysIdle = int(time.Since(ts).Hours() / 24)
-		h.Idle = h.DaysIdle > 2
+	latest := time.Time{}
+
+	for _, raw := range []string{comment.String, reply.String} {
+		ts, ok := parseTime(raw)
+		if ok && ts.After(latest) {
+			latest = ts
+		}
 	}
+	if latest.IsZero() {
+		h.LastPost = "never"
+		return h, nil
+	}
+	h.LastPost = prettyTime(latest.Format("2006-01-02 15:04:05"))
+	h.DaysIdle = int(time.Since(latest).Hours() / 24)
+	h.Idle = h.DaysIdle > 2
+
 	return h, nil
+}
+
+func loadTaskCounts(db *sql.DB) (TaskCounts, error) {
+	var counts TaskCounts
+
+	rows, err := db.Query("select status, count(*) from tasks group by status")
+	if err != nil {
+		return counts, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status string
+		var n int
+		if err := rows.Scan(&status, &n); err != nil {
+			return counts, err
+		}
+		switch status {
+		case "pending":
+			counts.Pending = n
+		case "running":
+			counts.Running = n
+		case "done":
+			counts.Done = n
+		case "failed":
+			counts.Failed = n
+		}
+		counts.Total += n
+	}
+	return counts, rows.Err()
+}
+
+func loadRecentTasks(db *sql.DB, limit int) ([]Task, error) {
+	query := `select t.id, t.status, t.video_id, t.attempts,
+		coalesce(c.quote, ''), coalesce(c.author, ''), coalesce(t.error, ''),
+		coalesce(t.completed_at, t.claimed_at, t.active_at)
+		from tasks t left join cornucopia c on c.id = t.quote_id
+		order by t.created_at desc limit ?`
+
+	rows, err := db.Query(query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tasks := []Task{}
+	for rows.Next() {
+		var t Task
+		var stamp sql.NullString
+
+		if err := rows.Scan(&t.ID, &t.Status, &t.VideoID, &t.Attempts, &t.Quote, &t.Author, &t.Error, &stamp); err != nil {
+			return nil, err
+		}
+		t.Short = t.ID
+		if len(t.Short) > 8 {
+			t.Short = t.Short[:8]
+		}
+		t.Stamp = stamp.String
+		tasks = append(tasks, t)
+	}
+	return tasks, rows.Err()
+}
+
+func loadTasks(db *sql.DB, limit int) (Tasks, error) {
+	var t Tasks
+	var err error
+
+	if t.Counts, err = loadTaskCounts(db); err != nil {
+		return t, err
+	}
+	t.Recent, err = loadRecentTasks(db, limit)
+	return t, err
 }
 
 func loadActivity(db *sql.DB, days int) ([]Day, error) {
@@ -220,6 +344,54 @@ func loadActivity(db *sql.DB, days int) ([]Day, error) {
 		}
 	}
 	return activity, nil
+}
+
+const (
+	waveWidth  = 1200
+	waveHeight = 200
+	waveFloor  = 3
+)
+
+func buildWave(activity []Day) Wave {
+	wave := Wave{Width: waveWidth, Height: waveHeight, Mid: waveHeight}
+
+	if len(activity) == 0 {
+		wave.Line = fmt.Sprintf("0,%d %d,%d", waveHeight, waveWidth, waveHeight)
+		return wave
+	}
+	slot := float64(waveWidth) / float64(len(activity))
+	points := make([]string, 0, len(activity)*3+2)
+	points = append(points, fmt.Sprintf("0,%d", waveHeight))
+
+	for i := range activity {
+		day := &activity[i]
+		left := float64(i) * slot
+
+		day.X = int(left)
+		day.W = int(slot) + 1
+
+		spike := 0
+		if day.Total > 0 {
+			spike = day.Percent * (waveHeight - waveFloor) / 100
+			if spike < waveFloor {
+				spike = waveFloor
+			}
+		}
+		day.Y = waveHeight - spike
+
+		if day.Total > wave.Peak {
+			wave.Peak = day.Total
+		}
+		points = append(points,
+			fmt.Sprintf("%d,%d", int(left), waveHeight),
+			fmt.Sprintf("%d,%d", int(left+slot/2), day.Y),
+			fmt.Sprintf("%d,%d", int(left+slot), waveHeight),
+		)
+	}
+	points = append(points, fmt.Sprintf("%d,%d", waveWidth, waveHeight))
+	wave.Line = strings.Join(points, " ")
+
+	return wave
 }
 
 func loadTopPosts(db *sql.DB, table string, limit int) ([]Post, error) {
@@ -304,6 +476,11 @@ func loadStats(db *sql.DB) (Stats, error) {
 		return s, err
 	}
 	if s.Activity, err = loadActivity(db, 30); err != nil {
+		return s, err
+	}
+	s.Wave = buildWave(s.Activity)
+
+	if s.Tasks, err = loadTasks(db, 25); err != nil {
 		return s, err
 	}
 	if s.TopComments, err = loadTopPosts(db, "comments", 8); err != nil {
